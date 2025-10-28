@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">OGON</string>
+    <string name="title_activity_main">OGON</string>
+    <string name="package_name">com.ogon.app</string>
+    <string name="custom_url_scheme">com.ogon.app</string>
+</resources>

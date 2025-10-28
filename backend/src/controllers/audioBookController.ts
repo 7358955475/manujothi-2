@@ -1,0 +1,361 @@
+import { Response } from 'express';
+import pool from '../config/database';
+import { AuthRequest } from '../middleware/auth';
+import fs from 'fs';
+import path from 'path';
+
+export const getAllAudioBooks = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const language = req.query.language as string;
+    const genre = req.query.genre as string;
+    const offset = (page - 1) * limit;
+
+    let query = 'SELECT * FROM audio_books WHERE is_active = true';
+    const queryParams: any[] = [];
+    let paramIndex = 1;
+
+    if (language) {
+      query += ` AND language = $${paramIndex}`;
+      queryParams.push(language);
+      paramIndex++;
+    }
+
+    if (genre) {
+      query += ` AND genre ILIKE $${paramIndex}`;
+      queryParams.push(`%${genre}%`);
+      paramIndex++;
+    }
+
+    query += ` ORDER BY created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+    queryParams.push(limit, offset);
+
+    const result = await pool.query(query, queryParams);
+
+    // Get total count
+    let countQuery = 'SELECT COUNT(*) FROM audio_books WHERE is_active = true';
+    const countParams: any[] = [];
+    let countParamIndex = 1;
+
+    if (language) {
+      countQuery += ` AND language = $${countParamIndex}`;
+      countParams.push(language);
+      countParamIndex++;
+    }
+
+    if (genre) {
+      countQuery += ` AND genre ILIKE $${countParamIndex}`;
+      countParams.push(`%${genre}%`);
+    }
+
+    const countResult = await pool.query(countQuery, countParams);
+    const total = parseInt(countResult.rows[0].count);
+
+    res.json({
+      audioBooks: result.rows,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('Get audio books error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export const getAudioBookById = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      'SELECT * FROM audio_books WHERE id = $1 AND is_active = true',
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: 'Audio book not found' });
+      return;
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Get audio book error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export const createAudioBook = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const {
+      title,
+      author,
+      narrator,
+      description,
+      cover_image_url,
+      language,
+      genre,
+      duration
+    } = req.body;
+
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+
+    if (!files?.audioFile || files.audioFile.length === 0) {
+      res.status(400).json({ error: 'Audio file is required' });
+      return;
+    }
+
+    const audio_file_path = files.audioFile[0].path;
+    const file_size = files.audioFile[0].size;
+
+    // Handle cover image: either uploaded file or URL from request body
+    let final_cover_image_url = cover_image_url;
+
+    // If a cover file was uploaded, use its path
+    if (files?.coverFile && files.coverFile.length > 0) {
+      // Convert file path to URL accessible by frontend
+      const coverPath = files.coverFile[0].path;
+      // Replace absolute path with relative path for URL construction
+      final_cover_image_url = coverPath.replace(process.cwd(), '');
+      // Ensure path starts with /
+      if (!final_cover_image_url.startsWith('/')) {
+        final_cover_image_url = '/' + final_cover_image_url;
+      }
+    }
+
+    const result = await pool.query(
+      `INSERT INTO audio_books (
+        title, author, narrator, description, cover_image_url,
+        audio_file_path, language, genre, duration, file_size, created_by
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
+      RETURNING *`,
+      [title, author, narrator, description, final_cover_image_url, audio_file_path, language, genre, duration, file_size, req.user!.id]
+    );
+
+    res.status(201).json({
+      message: 'Audio book created successfully',
+      audioBook: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Create audio book error:', error);
+    // Clean up uploaded file on error
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+    if (files?.audioFile && files.audioFile.length > 0) {
+      fs.unlink(files.audioFile[0].path, () => {});
+    }
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export const updateAudioBook = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const {
+      title,
+      author,
+      narrator,
+      description,
+      cover_image_url,
+      language,
+      genre,
+      duration,
+      is_active
+    } = req.body;
+
+  
+    let audio_file_path = null;
+    let file_size = null;
+    let final_cover_image_url = cover_image_url;
+
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+
+    // Handle audio file upload
+    if (files?.audioFile && files.audioFile.length > 0) {
+      // Get old file path to delete later
+      const oldFileResult = await pool.query(
+        'SELECT audio_file_path FROM audio_books WHERE id = $1',
+        [id]
+      );
+
+      if (oldFileResult.rows.length > 0) {
+        const oldFilePath = oldFileResult.rows[0].audio_file_path;
+        // Delete old file
+        fs.unlink(oldFilePath, () => {});
+      }
+
+      audio_file_path = files.audioFile[0].path;
+      file_size = files.audioFile[0].size;
+    }
+
+    // Handle cover image file upload
+    if (files?.coverFile && files.coverFile.length > 0) {
+      // Get old cover path to delete later
+      const oldCoverResult = await pool.query(
+        'SELECT cover_image_url FROM audio_books WHERE id = $1',
+        [id]
+      );
+
+      if (oldCoverResult.rows.length > 0 && oldCoverResult.rows[0].cover_image_url) {
+        const oldCoverPath = oldCoverResult.rows[0].cover_image_url;
+        // Delete old cover file if it exists
+        if (oldCoverPath.startsWith('/')) {
+          const fullOldCoverPath = process.cwd() + oldCoverPath;
+          fs.unlink(fullOldCoverPath, () => {});
+        }
+      }
+
+      // Convert file path to URL accessible by frontend
+      const coverPath = files.coverFile[0].path;
+      final_cover_image_url = coverPath.replace(process.cwd(), '');
+      // Ensure path starts with /
+      if (!final_cover_image_url.startsWith('/')) {
+        final_cover_image_url = '/' + final_cover_image_url;
+      }
+    }
+
+    // Convert string fields to appropriate types
+    const durationNum = duration ? (typeof duration === 'string' ? parseInt(duration, 10) : duration) : null;
+    const fileSizeNum = file_size || null; // file_size is already a number from req.file.size
+    const isActiveBool = is_active !== undefined ? (is_active === 'true' || is_active === true) : undefined;
+
+  
+    const result = await pool.query(
+      `UPDATE audio_books SET
+        title = COALESCE($1, title),
+        author = COALESCE($2, author),
+        narrator = COALESCE($3, narrator),
+        description = COALESCE($4, description),
+        cover_image_url = COALESCE($5, cover_image_url),
+        audio_file_path = COALESCE($6, audio_file_path),
+        language = COALESCE($7, language),
+        genre = COALESCE($8, genre),
+        duration = COALESCE($9, duration),
+        file_size = COALESCE($10, file_size),
+        is_active = COALESCE($11, is_active)
+      WHERE id = $12 AND is_active = true
+      RETURNING *`,
+      [title, author, narrator, description, final_cover_image_url, audio_file_path, language, genre, durationNum, fileSizeNum, isActiveBool, id]
+    );
+
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: 'Audio book not found' });
+      return;
+    }
+
+    res.json({
+      message: 'Audio book updated successfully',
+      audioBook: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Update audio book error:', error);
+    // Clean up uploaded files on error
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+    if (files?.audioFile && files.audioFile.length > 0) {
+      fs.unlink(files.audioFile[0].path, () => {});
+    }
+    if (files?.coverFile && files.coverFile.length > 0) {
+      fs.unlink(files.coverFile[0].path, () => {});
+    }
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export const deleteAudioBook = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    // First get the audio book to check for files to delete
+    const audioBookResult = await pool.query('SELECT * FROM audio_books WHERE id = $1', [id]);
+
+    if (audioBookResult.rows.length === 0) {
+      res.status(404).json({ error: 'Audio book not found' });
+      return;
+    }
+
+    const audioBook = audioBookResult.rows[0];
+
+    // Delete associated files from filesystem
+    if (audioBook.audio_file_path && audioBook.audio_file_path.startsWith('/')) {
+      const fullAudioPath = process.cwd() + audioBook.audio_file_path;
+      fs.unlink(fullAudioPath, () => {
+        console.log('Deleted audio file:', fullAudioPath);
+      });
+    }
+
+    if (audioBook.cover_image_url && audioBook.cover_image_url.startsWith('/')) {
+      const fullCoverPath = process.cwd() + audioBook.cover_image_url;
+      fs.unlink(fullCoverPath, () => {
+        console.log('Deleted cover image file:', fullCoverPath);
+      });
+    }
+
+    // Delete the audio book record from database permanently
+    const result = await pool.query('DELETE FROM audio_books WHERE id = $1 RETURNING id', [id]);
+
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: 'Audio book not found' });
+      return;
+    }
+
+    res.json({ message: 'Audio book deleted permanently' });
+  } catch (error) {
+    console.error('Delete audio book error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export const streamAudio = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      'SELECT audio_file_path FROM audio_books WHERE id = $1 AND is_active = true',
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: 'Audio book not found' });
+      return;
+    }
+
+    const filePath = result.rows[0].audio_file_path;
+
+    if (!fs.existsSync(filePath)) {
+      res.status(404).json({ error: 'Audio file not found' });
+      return;
+    }
+
+    const stat = fs.statSync(filePath);
+    const fileSize = stat.size;
+    const range = req.headers.range;
+
+    if (range) {
+      const parts = range.replace(/bytes=/, "").split("-");
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+      const chunksize = (end - start) + 1;
+      const file = fs.createReadStream(filePath, { start, end });
+      const head = {
+        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': chunksize,
+        'Content-Type': 'audio/mpeg',
+      };
+      res.writeHead(206, head);
+      file.pipe(res);
+    } else {
+      const head = {
+        'Content-Length': fileSize,
+        'Content-Type': 'audio/mpeg',
+      };
+      res.writeHead(200, head);
+      fs.createReadStream(filePath).pipe(res);
+    }
+  } catch (error) {
+    console.error('Stream audio error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};

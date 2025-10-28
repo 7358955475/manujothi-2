@@ -1,0 +1,28 @@
+{
+  "name": "MANUJOTHI Media Library",
+  "short_name": "OGON",
+  "description": "Digital media library for books, audiobooks, and videos",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fed7aa",
+  "theme_color": "#f97316",
+  "orientation": "portrait-primary",
+  "categories": ["education", "entertainment", "multimedia"],
+  "lang": "en-US",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+    "prefer_related_applications": false,
+  "related_applications": [
+    {
+      "platform": "play",
+      "url": "https://play.google.com/store/apps/details?id=com.ogon.app"
+    }
+  ]
+}
