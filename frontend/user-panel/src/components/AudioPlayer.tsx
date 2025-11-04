@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Heart, MoreHorizontal, ArrowLeft, Shuffle, Repeat, X } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { MediaItem } from '../services/api';
+import { MediaItem, getImageUrl, getMediaUrl } from '../services/api';
 
 interface AudioPlayerProps {
   audioBook: MediaItem;
@@ -12,23 +12,7 @@ interface AudioPlayerProps {
 }
 
 const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioBook, allAudioBooks, currentIndex, onBack, onTrackChange }) => {
-  // Helper function to construct proper image URLs
-  const getImageUrl = (imageUrl: string | null) => {
-    if (!imageUrl) return null;
 
-    // If it's already a full URL (starts with http), return as is
-    if (imageUrl.startsWith('http')) {
-      return imageUrl;
-    }
-
-    // If it's a local path starting with /public, prepend backend URL
-    if (imageUrl.startsWith('/public')) {
-      return `http://localhost:3001${imageUrl}`;
-    }
-
-    // Otherwise, treat as backend-relative path
-    return `http://localhost:3001${imageUrl.startsWith('/') ? imageUrl : '/' + imageUrl}`;
-  };
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -225,31 +209,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioBook, allAudioBooks, cur
 
   // Helper function to construct proper audio URL
   const constructAudioUrl = (audioPath: string) => {
-    if (!audioPath) return '';
-
-    // If it's already an HTTP URL, return as is
-    if (audioPath.startsWith('http')) {
-      return audioPath;
-    }
-
-    // If it's an absolute file system path, extract the filename and construct proper URL
-    if (audioPath.startsWith('/home/')) {
-      const fileName = audioPath.split('/').pop();
-      return `http://localhost:3001/public/audio/${fileName}`;
-    }
-
-    // If it starts with /audio/, it's already a correct relative path
-    if (audioPath.startsWith('/audio/')) {
-      return `http://localhost:3001${audioPath}`;
-    }
-
-    // If it starts with / but not /audio/, assume it's in the public/audio directory
-    if (audioPath.startsWith('/') && !audioPath.startsWith('/audio/')) {
-      return `http://localhost:3001/public/audio${audioPath}`;
-    }
-
-    // Default case: assume it's a relative path to public/audio
-    return `http://localhost:3001/public/audio/${audioPath}`;
+    return getMediaUrl(audioPath);
   };
 
   // Reset player state when track changes
@@ -359,7 +319,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioBook, allAudioBooks, cur
               isPlaying ? 'animate-pulse' : ''
             }`}>
               <img
-                src={getImageUrl(audioBook.cover_image_url) || 'https://images.pexels.com/photos/3184419/pexels-photo-3184419.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&fit=crop'}
+                src={getImageUrl(audioBook.cover_image_url) || ''}
                 alt={audioBook.title}
                 className="w-full h-full object-cover"
               />
@@ -600,6 +560,12 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioBook, allAudioBooks, cur
         ref={audioRef}
         src={constructAudioUrl(audioBook.audio_file_path || '')}
         preload="metadata"
+        crossOrigin="anonymous"
+        onError={(e) => {
+          console.error('Audio loading error:', e);
+          setError('Failed to load audio file. Please check if the file exists.');
+          setLoading(false);
+        }}
       />
 
       {/* Playlist Sidebar */}
@@ -640,7 +606,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioBook, allAudioBooks, cur
             >
               <div className="flex items-center gap-3">
                 <img
-                  src={getImageUrl(book.cover_image_url) || 'https://images.pexels.com/photos/3184419/pexels-photo-3184419.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop'}
+                  src={getImageUrl(book.cover_image_url) || ''}
                   alt={book.title}
                   className="w-12 h-12 rounded-lg object-cover"
                 />

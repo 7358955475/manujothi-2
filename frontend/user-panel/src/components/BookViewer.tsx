@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, AlertCircle, Maximize2, Minimize2, ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from 'lucide-react';
+import { getPdfUrl } from '../services/api';
 
 interface BookViewerProps {
   pdfUrl: string;
@@ -15,10 +16,7 @@ const BookViewer: React.FC<BookViewerProps> = ({ pdfUrl, title, onClose }) => {
   const [zoom, setZoom] = useState<string>('FitH');
 
   const constructPdfUrl = (url: string) => {
-    if (url.startsWith('http')) {
-      return url;
-    }
-    return `http://localhost:3001${url}`;
+    return getPdfUrl(url);
   };
 
   
@@ -66,12 +64,13 @@ const BookViewer: React.FC<BookViewerProps> = ({ pdfUrl, title, onClose }) => {
           setError(null);
         } else {
           setLoading(false);
-          setError('Failed to load PDF. The file may not be accessible.');
+          setError(`Failed to load PDF (${response.status}). The file may not be accessible.`);
         }
       })
-      .catch(() => {
+      .catch((err) => {
         setLoading(false);
-        setError('Failed to load PDF. Please check your connection.');
+        setError(`Failed to load PDF: ${err.message || 'Network error'}. Please check your connection.`);
+        console.error('PDF loading error:', err);
       })
       .finally(() => {
         clearTimeout(loadingTimeout);

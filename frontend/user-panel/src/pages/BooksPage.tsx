@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { Search, Filter, Book, User, Calendar, ChevronLeft, FileText, Heart } from 'lucide-react';
-import { MediaItem } from '../services/api';
+import { MediaItem, getImageUrl } from '../services/api';
 import LazyImage from '../components/LazyImage';
-import { useFavorites } from '../hooks/useFavorites';
+import { useFavoritesImproved } from '../hooks/useFavoritesImproved';
 
 interface BooksPageProps {
   books: MediaItem[];
@@ -16,7 +16,7 @@ const BooksPage: React.FC<BooksPageProps> = ({ books, onMediaClick, onBack }) =>
   const [selectedLanguage, setSelectedLanguage] = useState('all');
   const [selectedFormat, setSelectedFormat] = useState('all');
   const [sortBy, setSortBy] = useState('latest');
-  const { isFavorited, toggleFavorite } = useFavorites();
+  const { isFavorited, toggleFavorite } = useFavoritesImproved();
 
   // Handle favorite button click
   const handleFavoriteClick = async (e: React.MouseEvent, book: MediaItem) => {
@@ -237,7 +237,7 @@ const BooksPage: React.FC<BooksPageProps> = ({ books, onMediaClick, onBack }) =>
                 {/* Cover Image */}
                 <div className="relative aspect-[3/4] overflow-hidden bg-gradient-to-br from-orange-100 to-orange-200">
                   <LazyImage
-                    src={book.cover_image_url || ''}
+                    src={getImageUrl(book.cover_image_url) || ''}
                     alt={book.title}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     fallback=""

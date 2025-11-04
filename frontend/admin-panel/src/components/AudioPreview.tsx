@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { X, Edit3, Save, Upload, FileAudio, Play, Pause, Volume2, Eye, EyeOff } from 'lucide-react';
 
 interface AudioPreviewData {
@@ -100,7 +100,8 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
       analyzeAudioFile(previewData.audioFile);
     } else if (previewData.cover_url) {
       // Use existing cover URL
-      setCoverPreview(getImageUrl(previewData.cover_url));
+      const imageUrl = getImageUrl(previewData.cover_url);
+      setCoverPreview(imageUrl || '');
     }
   }, [previewData]);
 
@@ -215,13 +216,12 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
     }
   };
 
-  const getAudioSrc = () => {
+  const audioSrc = useMemo(() => {
     if (previewData.audioFile && audioObjectUrl) {
-      console.log('Audio src:', audioObjectUrl);
       return audioObjectUrl;
     }
     return '';
-  };
+  }, [previewData.audioFile, audioObjectUrl]);
 
   const formatDuration = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
@@ -305,7 +305,7 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
                   <div className="bg-white rounded-2xl p-6 shadow-xl border border-gray-100 mb-6">
                     <audio
                       ref={audioRef}
-                      src={getAudioSrc()}
+                      src={audioSrc}
                       onTimeUpdate={handleTimeUpdate}
                       onLoadedMetadata={handleLoadedMetadata}
                       onPlay={() => setIsPlaying(true)}
@@ -622,7 +622,7 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
         </div>
       </div>
 
-      <style jsx={true}>{`
+      <style>{`
         .slider::-webkit-slider-thumb {
           appearance: none;
           width: 16px;

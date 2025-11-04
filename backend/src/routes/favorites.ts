@@ -54,6 +54,19 @@ router.get('/check/:media_type/:media_id', [
     .withMessage('Media ID must be a valid UUID')
 ], handleValidationErrors, FavoritesController.checkFavorite);
 
+// POST /api/favorites/batch-check - Check multiple items at once
+router.post('/batch-check', [
+  body('items')
+    .isArray()
+    .withMessage('Items must be an array'),
+  body('items.*.media_type')
+    .isIn(['book', 'audio', 'video'])
+    .withMessage('Media type must be book, audio, or video'),
+  body('items.*.media_id')
+    .isUUID()
+    .withMessage('Media ID must be a valid UUID')
+], handleValidationErrors, FavoritesController.batchCheckFavorites);
+
 // DELETE /api/favorites/:media_type/:media_id - Remove a favorite
 router.delete('/:media_type/:media_id', [
   param('media_type')

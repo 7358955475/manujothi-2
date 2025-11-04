@@ -61,11 +61,11 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onMediaClick, onBack }) =
     const mediaType = getMediaType(item);
     if (mediaType === 'video') {
       if (item.youtube_id) {
-        return `https://img.youtube.com/vi/${item.youtube_id}/maxresdefault.jpg`;
+        return `https://i.ytimg.com/vi/${item.youtube_id}/hqdefault.jpg`;
       }
-      return "https://images.pexels.com/photos/1366919/pexels-photo-1366919.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop";
+      return "";
     }
-    return "https://images.pexels.com/photos/1130980/pexels-photo-1130980.jpeg?auto=compress&cs=tinysrgb&w=300&h=400&fit=crop";
+    return "";
   };
 
   const getAspectRatio = (item: MediaItem) => {

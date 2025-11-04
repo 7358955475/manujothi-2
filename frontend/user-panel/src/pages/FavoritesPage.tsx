@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Heart, Book, Headphones, Video, Search, ChevronLeft, Clock, User, Calendar, FileText, Music, Youtube, Film, Play } from 'lucide-react';
-import { MediaItem } from '../services/api';
+import { MediaItem, getImageUrl } from '../services/api';
 import LazyImage from '../components/LazyImage';
 import { useFavoritesImproved } from '../hooks/useFavoritesImproved';
 
@@ -107,20 +107,28 @@ const FavoritesPage: React.FC<FavoritesPageProps> = ({ onMediaClick, onBack }) =
     }
   };
 
-  // Get best thumbnail URL
+  // Get best thumbnail URL with proper URL construction
   const getBestThumbnailUrl = (item: MediaItem) => {
-    if (item.cover_image_url) return item.cover_image_url;
-    if (item.thumbnail_url) return item.thumbnail_url;
+    // Use cover_image_url if available (for books and audio)
+    if (item.cover_image_url) {
+      return getImageUrl(item.cover_image_url);
+    }
+
+    // Use thumbnail_url if available (for videos)
+    if (item.thumbnail_url) {
+      return getImageUrl(item.thumbnail_url);
+    }
 
     // Fallbacks based on media type
     const mediaType = getMediaType(item);
     if (mediaType === 'video') {
       if (item.youtube_id) {
-        return `https://img.youtube.com/vi/${item.youtube_id}/maxresdefault.jpg`;
+        // Try multiple YouTube thumbnail qualities as fallbacks
+        return `https://i.ytimg.com/vi/${item.youtube_id}/hqdefault.jpg`;
       }
-      return "https://images.pexels.com/photos/1366919/pexels-photo-1366919.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop";
+      return "";
     }
-    return "https://images.pexels.com/photos/1130980/pexels-photo-1130980.jpeg?auto=compress&cs=tinysrgb&w=300&h=400&fit=crop";
+    return "";
   };
 
   // Get media type icon

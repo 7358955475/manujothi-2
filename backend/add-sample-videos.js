@@ -16,7 +16,9 @@ const extractYouTubeId = (url) => {
 };
 
 const getYouTubeThumbnail = (videoId) => {
-  return `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+  // Use hqdefault.jpg as it's more reliable than maxresdefault.jpg
+  // maxresdefault.jpg may not exist for some videos, but hqdefault.jpg almost always exists
+  return `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
 };
 
 const sampleVideos = [

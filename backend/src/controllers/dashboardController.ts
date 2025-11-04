@@ -13,7 +13,7 @@ export class DashboardController {
 
       const limit = parseInt(req.query.limit as string) || 10;
 
-      // Get recent activity with media details
+      // Get recent activity with media details - ONLY VALID (EXISTING & ACTIVE) MEDIA
       const query = `
         SELECT DISTINCT ON (ua.media_type, ua.media_id)
           ua.media_type,
@@ -45,7 +45,7 @@ export class DashboardController {
             WHEN ua.media_type = 'video' THEN v.category
           END as genre_or_category,
           CASE
-            WHEN ua.media_type = 'book' THEN b.file_url
+            WHEN ua.media_type = 'book' THEN b.pdf_url
             WHEN ua.media_type = 'audio' THEN ab.audio_file_path
             WHEN ua.media_type = 'video' THEN v.video_file_path
           END as file_url,
@@ -61,10 +61,16 @@ export class DashboardController {
           up.time_spent
         FROM user_activity ua
         LEFT JOIN user_progress up ON ua.user_id = up.user_id AND ua.media_type = up.media_type AND ua.media_id = up.media_id
-        LEFT JOIN books b ON ua.media_id = b.id AND ua.media_type = 'book'
-        LEFT JOIN audio_books ab ON ua.media_id = ab.id AND ua.media_type = 'audio'
-        LEFT JOIN videos v ON ua.media_id = v.id AND ua.media_type = 'video'
-        WHERE ua.user_id = $1 AND ua.activity_type = 'viewed'
+        LEFT JOIN books b ON ua.media_id = b.id AND ua.media_type = 'book' AND b.is_active = true
+        LEFT JOIN audio_books ab ON ua.media_id = ab.id AND ua.media_type = 'audio' AND ab.is_active = true
+        LEFT JOIN videos v ON ua.media_id = v.id AND ua.media_type = 'video' AND v.is_active = true
+        WHERE ua.user_id = $1
+          AND ua.activity_type = 'viewed'
+          AND (
+            (ua.media_type = 'book' AND b.id IS NOT NULL) OR
+            (ua.media_type = 'audio' AND ab.id IS NOT NULL) OR
+            (ua.media_type = 'video' AND v.id IS NOT NULL)
+          )
         ORDER BY ua.media_type, ua.media_id, ua.created_at DESC
         LIMIT $2
       `;
@@ -103,10 +109,9 @@ export class DashboardController {
           genre as category,
           NULL as duration,
           description,
-          file_url,
-          pdf_url,
-          file_format,
-          mime_type
+          pdf_url as file_url,
+          'pdf' as file_format,
+          'application/pdf' as mime_type
         FROM books
         WHERE is_active = true
         LIMIT $1
@@ -173,7 +178,7 @@ export class DashboardController {
             WHEN up.media_type = 'video' THEN v.duration
           END as duration_or_year,
           CASE
-            WHEN up.media_type = 'book' THEN b.file_url
+            WHEN up.media_type = 'book' THEN b.pdf_url
             WHEN up.media_type = 'audio' THEN ab.audio_file_path
             WHEN up.media_type = 'video' THEN v.video_file_path
           END as file_url,
@@ -183,28 +188,34 @@ export class DashboardController {
             WHEN up.media_type = 'video' THEN v.video_file_path
           END as content_url,
           CASE
-            WHEN up.media_type = 'book' THEN b.file_format
+            WHEN up.media_type = 'book' THEN 'pdf'
             WHEN up.media_type = 'audio' THEN NULL
             WHEN up.media_type = 'video' THEN NULL
           END as file_format,
           CASE
-            WHEN up.media_type = 'book' THEN b.mime_type
+            WHEN up.media_type = 'book' THEN 'application/pdf'
             WHEN up.media_type = 'audio' THEN NULL
             WHEN up.media_type = 'video' THEN NULL
           END as mime_type
         FROM user_progress up
-        LEFT JOIN books b ON up.media_id = b.id AND up.media_type = 'book'
-        LEFT JOIN audio_books ab ON up.media_id = ab.id AND up.media_type = 'audio'
-        LEFT JOIN videos v ON up.media_id = v.id AND up.media_type = 'video'
-        WHERE up.user_id = $1 AND up.status != 'not_started'
+        LEFT JOIN books b ON up.media_id = b.id AND up.media_type = 'book' AND b.is_active = true
+        LEFT JOIN audio_books ab ON up.media_id = ab.id AND up.media_type = 'audio' AND ab.is_active = true
+        LEFT JOIN videos v ON up.media_id = v.id AND up.media_type = 'video' AND v.is_active = true
+        WHERE up.user_id = $1
+          AND up.status != 'not_started'
+          AND (
+            (up.media_type = 'book' AND b.id IS NOT NULL) OR
+            (up.media_type = 'audio' AND ab.id IS NOT NULL) OR
+            (up.media_type = 'video' AND v.id IS NOT NULL)
+          )
         ORDER BY up.last_accessed DESC
       `;
 
       const result = await pool.query(query, [userId]);
 
-      // Group by status
-      const inProgress = result.rows.filter(item => item.status === 'in_progress');
-      const completed = result.rows.filter(item => item.status === 'completed');
+      // Group by status - only valid media items
+      const inProgress = result.rows.filter(item => item.status === 'in_progress' && item.title);
+      const completed = result.rows.filter(item => item.status === 'completed' && item.title);
 
       res.json({
         inProgress,

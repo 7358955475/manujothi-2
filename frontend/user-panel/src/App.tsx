@@ -1,5 +1,6 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react';
-import { Search, Calendar, Bell, User as UserIcon, ChevronLeft, ChevronRight, LogOut, Play, Book, Headphones, Heart, BarChart3 } from 'lucide-react';
+import { Search, Calendar, Bell, User as UserIcon, ChevronLeft, ChevronRight, LogOut, Play, Book, Headphones, Heart, BarChart3, Settings } from 'lucide-react';
+import MediaDiagnostics from './components/MediaDiagnostics';
 import { booksApi, audioBooksApi, videosApi, MediaItem } from './services/api';
 import Login from './components/Login';
 import { User } from './types/auth';
@@ -46,6 +47,7 @@ const MediaLibraryApp = () => {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [sortBy, setSortBy] = useState({
     books: 'default',
     audio: 'default',
@@ -78,10 +80,11 @@ const MediaLibraryApp = () => {
   const fetchNotifications = async () => {
     try {
       const userId = user?.id || 'anonymous';
-      const response = await fetch(`http://localhost:3001/api/latest-content?limit=10&user_id=${userId}`);
-      if (response.ok) {
-        const data = await response.json();
-        setNotifications(data.notifications || []);
+      const apiModule = await import('./services/api');
+      const api = apiModule.default;
+      const response = await api.get(`/latest-content?limit=10&user_id=${userId}`);
+      if (response.data) {
+        setNotifications(response.data.notifications || []);
       }
     } catch (error) {
       console.error('Failed to fetch notifications:', error);
@@ -92,16 +95,12 @@ const MediaLibraryApp = () => {
   const markNotificationsAsReadForContent = async (contentId: string, contentType: string) => {
     try {
       const userId = user?.id || 'anonymous';
-      await fetch('http://localhost:3001/api/latest-content/mark-read', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          user_id: userId,
-          content_id: contentId,
-          content_type: contentType
-        })
+      const apiModule = await import('./services/api');
+      const api = apiModule.default;
+      await api.post('/latest-content/mark-read', {
+        user_id: userId,
+        content_id: contentId,
+        content_type: contentType
       });
 
       // Update local state to mark matching notifications as read
@@ -118,10 +117,10 @@ const MediaLibraryApp = () => {
 
   // Refetch notifications when user changes
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && user) {
       fetchNotifications();
     }
-  }, [user]);
+  }, [isAuthenticated]);
 
   const calendarEvents = [
     { id: 1, date: '2025-08-30', title: 'New Content Release', type: 'content' },
@@ -202,10 +201,8 @@ const MediaLibraryApp = () => {
     checkAuth();
   }, []);
 
-  // Load data from backend when authenticated
+  // Load data from backend (public content doesn't require authentication)
   useEffect(() => {
-    if (!isAuthenticated) return;
-
     const loadData = async () => {
       const startTime = performance.now();
       
@@ -240,6 +237,10 @@ const MediaLibraryApp = () => {
         const audioData = audioBooksResponse.data.audioBooks || [];
         const videosData = videosResponse.data.videos || [];
 
+        console.log('📚 Fetched Books:', booksData.length, 'books');
+        console.log('🎵 Fetched Audio:', audioData.length, 'audiobooks');
+        console.log('🎬 Fetched Videos:', videosData.length, 'videos');
+
         setBooks(booksData);
         setAudio(audioData);
         setVideos(videosData);
@@ -251,13 +252,13 @@ const MediaLibraryApp = () => {
           .slice(0, 3);
         setLatestContent(latest);
 
-        // Cache the data
+        // Cache the data with shorter duration for quicker updates
         dataCache.set(cacheKey, {
           books: booksData,
           audioBooks: audioData,
           videos: videosData,
           latest
-        }, 3 * 60 * 1000); // 3 minutes cache
+        }, 30 * 1000); // 30 seconds cache - allows quicker updates from admin uploads
 
         logCustomMetric('API Load Time', performance.now() - startTime);
         
@@ -270,18 +271,28 @@ const MediaLibraryApp = () => {
         fetchNotifications();
 
       } catch (error) {
-        console.error('Error loading data:', error);
+        console.error('❌ ERROR loading data:', error);
+        console.error('Error details:', {
+          message: error.message,
+          stack: error.stack,
+          response: error.response
+        });
         setBooks([]);
         setAudio([]);
         setVideos([]);
         setLatestContent([]);
       } finally {
         setLoading(false);
+        console.log('✅ Data loading complete. Final state:', {
+          books: books.length,
+          audio: audio.length,
+          videos: videos.length
+        });
       }
     };
 
     loadData();
-  }, [isAuthenticated, logCustomMetric]);
+  }, []); // Load data once on mount - books/audio/videos are public
 
   // Prevent right-click on media elements
   useEffect(() => {
@@ -453,16 +464,11 @@ const MediaLibraryApp = () => {
     // Mark notification as read via API
     try {
       const userId = user?.id || 'anonymous';
-      await fetch('http://localhost:3001/api/latest-content/mark-read', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          user_id: userId,
-          content_id: notification.id,
-          content_type: notification.content_type
-        })
+      const { api } = await import('./services/api');
+      await api.post('/latest-content/mark-read', {
+        user_id: userId,
+        content_id: notification.id,
+        content_type: notification.content_type
       });
 
       // Update local state
@@ -915,6 +921,15 @@ const MediaLibraryApp = () => {
                 )}
               </button>
 
+              {/* Diagnostics Button */}
+              <button
+                onClick={() => setShowDiagnostics(true)}
+                className="p-2 text-gray-600 hover:text-blue-500 transition-colors duration-200"
+                title="Media Diagnostics"
+              >
+                <Settings size={20} className="sm:w-6 sm:h-6" />
+              </button>
+
               <div className="relative" ref={userMenuRef}>
                 <button
                   onClick={() => setShowUserMenu(!showUserMenu)}
@@ -996,11 +1011,14 @@ const MediaLibraryApp = () => {
                   <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-orange-500"></div>
                 </div>
               }>
-                <BooksPage
-                  books={books}
-                  onMediaClick={(item, type) => handleMediaClick(item, 'pdf')}
-                  onBack={() => setCurrentPage('home')}
-                />
+                {(() => {
+                  console.log('📖 Rendering BooksPage with', books.length, 'books:', books);
+                  return <BooksPage
+                    books={books}
+                    onMediaClick={(item, type) => handleMediaClick(item, 'pdf')}
+                    onBack={() => setCurrentPage('home')}
+                  />;
+                })()}
               </Suspense>
             ) : currentPage === 'audio' ? (
               <Suspense fallback={
@@ -1008,11 +1026,14 @@ const MediaLibraryApp = () => {
                   <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-orange-500"></div>
                 </div>
               }>
-                <AudioPage
-                  audioBooks={audio}
-                  onMediaClick={(item, type) => handleMediaClick(item, 'audio')}
-                  onBack={() => setCurrentPage('home')}
-                />
+                {(() => {
+                  console.log('🎵 Rendering AudioPage with', audio.length, 'audiobooks:', audio);
+                  return <AudioPage
+                    audioBooks={audio}
+                    onMediaClick={(item, type) => handleMediaClick(item, 'audio')}
+                    onBack={() => setCurrentPage('home')}
+                  />;
+                })()}
               </Suspense>
             ) : currentPage === 'videos' ? (
               <Suspense fallback={
@@ -1020,11 +1041,14 @@ const MediaLibraryApp = () => {
                   <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-orange-500"></div>
                 </div>
               }>
-                <VideoPage
-                  videos={videos}
-                  onMediaClick={(item, type) => handleMediaClick(item, 'video')}
-                  onBack={() => setCurrentPage('home')}
-                />
+                {(() => {
+                  console.log('🎬 Rendering VideoPage with', videos.length, 'videos:', videos);
+                  return <VideoPage
+                    videos={videos}
+                    onMediaClick={(item, type) => handleMediaClick(item, 'video')}
+                    onBack={() => setCurrentPage('home')}
+                  />;
+                })()}
               </Suspense>
             ) : currentPage === 'favorites' ? (
               <Suspense fallback={
@@ -1144,6 +1168,12 @@ const MediaLibraryApp = () => {
           />
         </Suspense>
       )}
+
+      {/* Media Diagnostics Modal */}
+      <MediaDiagnostics
+        isOpen={showDiagnostics}
+        onClose={() => setShowDiagnostics(false)}
+      />
         </>
       )}
     </div>

@@ -17,7 +17,7 @@ const LazyImage: React.FC<LazyImageProps> = ({
   src,
   alt,
   className = '',
-  fallback = 'https://images.pexels.com/photos/1130980/pexels-photo-1130980.jpeg?auto=compress&cs=tinysrgb&w=300&h=400&fit=crop',
+  fallback = '',
   placeholder = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjQwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjNmNGY2Ii8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzlDQTNBRiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkxvYWRpbmcuLi48L3RleHQ+PC9zdmc+',
   autoSize = false,
   priority = false,
@@ -27,9 +27,25 @@ const LazyImage: React.FC<LazyImageProps> = ({
   const [imageSrc, setImageSrc] = useState(placeholder);
   const [isLoaded, setIsLoaded] = useState(false);
   const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
+  const [fallbackAttempts, setFallbackAttempts] = useState<string[]>([]);
   const imgRef = useRef<HTMLImageElement>(null);
   const loadStartTimeRef = useRef<number>(0);
   const { monitorImageLoad, getOptimizedImageUrl } = useImageOptimization();
+
+  // Generate YouTube thumbnail fallback URLs in order of quality
+  const getYouTubeThumbnailFallbacks = (url: string): string[] => {
+    const videoIdMatch = url.match(/ytimg\.com\/vi\/([^\/]+)/);
+    if (!videoIdMatch) return [];
+
+    const videoId = videoIdMatch[1];
+    return [
+      `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+      `https://i.ytimg.com/vi/${videoId}/sddefault.jpg`,
+      `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+      `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`,
+      `https://i.ytimg.com/vi/${videoId}/default.jpg`
+    ];
+  };
 
   useEffect(() => {
     const img = imgRef.current;
@@ -103,6 +119,26 @@ const LazyImage: React.FC<LazyImageProps> = ({
   };
 
   const handleError = () => {
+    // If this is a YouTube thumbnail, try fallback qualities
+    if (imageSrc.includes('ytimg.com/vi/')) {
+      const fallbacks = getYouTubeThumbnailFallbacks(imageSrc);
+      const currentIndex = fallbacks.indexOf(imageSrc);
+
+      console.log(`[LazyImage] Image failed: ${imageSrc}`);
+      console.log(`[LazyImage] Fallback index: ${currentIndex} of ${fallbacks.length}`);
+      console.log(`[LazyImage] Available fallbacks:`, fallbacks);
+
+      // Try the next quality level
+      if (currentIndex >= 0 && currentIndex < fallbacks.length - 1) {
+        const nextFallback = fallbacks[currentIndex + 1];
+        console.log(`[LazyImage] YouTube thumbnail failed, trying next quality: ${nextFallback}`);
+        setImageSrc(nextFallback);
+        return;
+      }
+    }
+
+    // All YouTube qualities failed or not a YouTube thumbnail, use final fallback
+    console.log(`[LazyImage] Using final fallback for: ${imageSrc}`);
     setImageSrc(fallback);
   };
 
@@ -134,7 +170,7 @@ const LazyImage: React.FC<LazyImageProps> = ({
       loading={priority ? 'eager' : 'lazy'}
       sizes={sizes}
       decoding="async"
-      fetchPriority={priority ? 'high' : 'auto'}
+      fetchpriority={priority ? 'high' : 'auto'}
     />
   );
 };

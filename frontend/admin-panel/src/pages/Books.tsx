@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Edit, Trash2, Search, Upload, File, AlertCircle, CheckCircle, Eye } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, Upload, File, AlertCircle, CheckCircle, Eye, X } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { booksApi } from '../services/api';
 import BookPreview from '../components/BookPreview';
@@ -20,6 +20,7 @@ const Books: React.FC = () => {
   const [uploadError, setUploadError] = useState<string>('');
   const [showPreview, setShowPreview] = useState(false);
   const [previewData, setPreviewData] = useState<any>(null);
+  const [coverPreviewUrl, setCoverPreviewUrl] = useState<string>('');
 
   const pdfFileRef = useRef<HTMLInputElement>(null);
   const coverFileRef = useRef<HTMLInputElement>(null);
@@ -37,11 +38,11 @@ const Books: React.FC = () => {
 
     // If it's a local path starting with /public, prepend backend URL
     if (imageUrl.startsWith('/public')) {
-      return `http://localhost:3003${imageUrl}`;
+      return `http://localhost:3001${imageUrl}`;
     }
 
-    // Otherwise, treat as backend-relative path
-    return `http://localhost:3003${imageUrl.startsWith('/') ? imageUrl : '/' + imageUrl}`;
+    // Default: assume it's a relative path to images (same logic as user panel)
+    return `http://localhost:3001${imageUrl.startsWith('/') ? imageUrl : '/public/images/' + imageUrl}`;
   };
 
   useEffect(() => {
@@ -108,8 +109,22 @@ const Books: React.FC = () => {
 
       const formData = new FormData();
 
-      // Add text fields
+      // Add text fields, but skip cover_image_url if a cover file is being uploaded
       Object.keys(data).forEach(key => {
+        // IMPORTANT: Skip cover_image_url if a cover file is being uploaded
+        // This ensures uploaded files take priority over URL fields
+        if (key === 'cover_image_url' && selectedCoverFile) {
+          console.log('Skipping cover_image_url because cover file is being uploaded');
+          return;
+        }
+
+        // IMPORTANT: Skip pdf_url if a book file is being uploaded
+        // This ensures uploaded files take priority over URL fields
+        if (key === 'pdf_url' && selectedPdfFile) {
+          console.log('Skipping pdf_url because book file is being uploaded');
+          return;
+        }
+
         if (data[key] !== undefined && data[key] !== null && data[key] !== '') {
           formData.append(key, data[key]);
         }
@@ -118,14 +133,16 @@ const Books: React.FC = () => {
       setUploadStatus('Processing files...');
       setUploadProgress(25);
 
-      // Add PDF file if selected
+      // Add book file if selected
       if (selectedPdfFile) {
-        formData.append('pdfFile', selectedPdfFile);
-        setUploadStatus(`Uploading PDF: ${selectedPdfFile.name}...`);
+        console.log('Uploading book file:', selectedPdfFile.name);
+        formData.append('bookFile', selectedPdfFile);
+        setUploadStatus(`Uploading book: ${selectedPdfFile.name}...`);
       }
 
       // Add cover image file if selected
       if (selectedCoverFile) {
+        console.log('Uploading cover file:', selectedCoverFile.name);
         formData.append('coverFile', selectedCoverFile);
         setUploadStatus('Uploading cover image...');
       }
@@ -191,13 +208,20 @@ const Books: React.FC = () => {
     if (!file) return;
 
     const errors = [];
+    const fileName = file.name.toLowerCase();
+    const allowedExtensions = ['.pdf', '.txt'];
+    const extension = fileName.substring(fileName.lastIndexOf('.'));
 
-    if (file.type !== 'application/pdf') {
-      errors.push('File must be a PDF');
+    if (!allowedExtensions.includes(extension)) {
+      errors.push('File must be PDF or TXT format');
     }
 
-    if (!file.name.toLowerCase().endsWith('.pdf')) {
-      errors.push('File must have .pdf extension');
+    if (extension === '.pdf' && file.type !== 'application/pdf') {
+      errors.push('File must be a valid PDF');
+    }
+
+    if (extension === '.txt' && !file.type.includes('text')) {
+      errors.push('File must be a valid text file');
     }
 
     if (file.size > 50 * 1024 * 1024) {
@@ -209,7 +233,7 @@ const Books: React.FC = () => {
     }
 
     if (errors.length > 0) {
-      setUploadError(`PDF file error: ${errors.join(', ')}`);
+      setUploadError(`Book file error: ${errors.join(', ')}`);
       if (pdfFileRef.current) {
         pdfFileRef.current.value = '';
       }
@@ -251,16 +275,25 @@ const Books: React.FC = () => {
       if (coverFileRef.current) {
         coverFileRef.current.value = '';
       }
+      setCoverPreviewUrl('');
       return;
     }
 
     setSelectedCoverFile(file);
+
+    // Create preview URL for the selected cover image
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setCoverPreviewUrl(e.target?.result as string);
+    };
+    reader.readAsDataURL(file);
   };
 
   const openCreateModal = () => {
     setEditingBook(null);
     setSelectedPdfFile(null);
     setSelectedCoverFile(null);
+    setCoverPreviewUrl('');
     setUploadProgress(0);
     setUploadStatus('');
     setUploadError('');
@@ -535,9 +568,33 @@ const Books: React.FC = () => {
                   {/* Show new file preview when a new file is selected */}
                   {selectedCoverFile && (
                     <div className="flex items-center space-x-4 p-3 bg-green-50 rounded-lg">
-                      <div className="w-16 h-20 bg-green-100 border border-green-300 rounded flex items-center justify-center">
-                        <File size={24} className="text-green-600" />
-                      </div>
+                      {coverPreviewUrl ? (
+                        <div className="relative">
+                          <img
+                            src={coverPreviewUrl}
+                            alt="Cover preview"
+                            className="w-20 h-28 object-cover rounded border-2 border-green-300"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedCoverFile(null);
+                              setCoverPreviewUrl('');
+                              if (coverFileRef.current) {
+                                coverFileRef.current.value = '';
+                              }
+                            }}
+                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors shadow-lg"
+                            title="Remove cover image"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="w-16 h-20 bg-green-100 border border-green-300 rounded flex items-center justify-center">
+                          <File size={24} className="text-green-600" />
+                        </div>
+                      )}
                       <div className="flex-1">
                         <div className="text-sm font-medium text-green-700">New cover image selected</div>
                         <div className="text-xs text-green-600">{selectedCoverFile.name}</div>
@@ -575,17 +632,17 @@ const Books: React.FC = () => {
               </div>
 
               <div className="form-group">
-                <label className="form-label">PDF File</label>
+                <label className="form-label">Book File (PDF or TXT)</label>
                 <div className="space-y-3">
-                  {/* Show current PDF indicator when editing */}
+                  {/* Show current file indicator when editing */}
                   {editingBook && watch('pdf_url') && !selectedPdfFile && (
                     <div className="flex items-center space-x-4 p-3 bg-gray-50 rounded-lg">
                       <div className="w-16 h-20 bg-red-100 border border-red-300 rounded flex items-center justify-center">
                         <File size={24} className="text-red-600" />
                       </div>
                       <div className="flex-1">
-                        <div className="text-sm font-medium text-gray-700">Current PDF file</div>
-                        <div className="text-xs text-gray-500">This PDF will be kept unless you upload a new one</div>
+                        <div className="text-sm font-medium text-gray-700">Current book file</div>
+                        <div className="text-xs text-gray-500">This file will be kept unless you upload a new one</div>
                         <div className="text-xs text-gray-400 truncate max-w-xs">{watch('pdf_url')}</div>
                       </div>
                     </div>
@@ -598,7 +655,7 @@ const Books: React.FC = () => {
                         <File size={24} className="text-green-600" />
                       </div>
                       <div className="flex-1">
-                        <div className="text-sm font-medium text-green-700">New PDF selected</div>
+                        <div className="text-sm font-medium text-green-700">New book file selected</div>
                         <div className="text-xs text-green-600">{selectedPdfFile.name}</div>
                         <div className="text-xs text-green-500">
                           {(selectedPdfFile.size / (1024 * 1024)).toFixed(2)} MB
@@ -610,7 +667,7 @@ const Books: React.FC = () => {
                   <input
                     {...register('pdf_url')}
                     type="url"
-                    placeholder="Or enter PDF URL"
+                    placeholder="Or enter book file URL"
                     className="input-field w-full"
                   />
                   <div className="flex items-center space-x-2">
@@ -620,13 +677,13 @@ const Books: React.FC = () => {
                       className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
                     >
                       <Upload size={16} />
-                      <span>{editingBook ? 'Change PDF' : 'Upload PDF'}</span>
+                      <span>{editingBook ? 'Change File' : 'Upload Book (PDF/TXT)'}</span>
                     </button>
                   </div>
                   <input
                     ref={pdfFileRef}
                     type="file"
-                    accept=".pdf"
+                    accept=".pdf,.txt,application/pdf,text/plain"
                     onChange={handlePdfFileSelect}
                     className="hidden"
                   />

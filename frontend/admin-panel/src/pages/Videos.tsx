@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Edit, Trash2, Search, ExternalLink, ToggleLeft, ToggleRight, Upload, File, AlertCircle, CheckCircle, Eye } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, ExternalLink, ToggleLeft, ToggleRight, Upload, File, AlertCircle, CheckCircle, Eye, X } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { videosApi } from '../services/api';
 import VideoPreview from '../components/VideoPreview';
@@ -37,6 +37,15 @@ const Videos: React.FC = () => {
   const getImageUrl = (imageUrl: string | null) => {
     if (!imageUrl) return null;
 
+    // If it's a YouTube thumbnail URL, extract video ID and reconstruct with reliable domain
+    if (imageUrl.includes('youtube.com/vi/') || imageUrl.includes('ytimg.com/vi/')) {
+      const videoId = imageUrl.match(/vi\/([^\/]+)/)?.[1];
+      if (videoId) {
+        // Use i.ytimg.com with hqdefault which is reliably available (same as user panel)
+        return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+      }
+    }
+
     // If it's already a full URL (starts with http), return as is
     if (imageUrl.startsWith('http')) {
       return imageUrl;
@@ -44,11 +53,11 @@ const Videos: React.FC = () => {
 
     // If it's a local path starting with /public, prepend backend URL
     if (imageUrl.startsWith('/public')) {
-      return `http://localhost:3003${imageUrl}`;
+      return `http://localhost:3001${imageUrl}`;
     }
 
     // Otherwise, treat as backend-relative path
-    return `http://localhost:3003${imageUrl.startsWith('/') ? imageUrl : '/' + imageUrl}`;
+    return `http://localhost:3001${imageUrl.startsWith('/') ? imageUrl : '/' + imageUrl}`;
   };
 
   // Helper function to get video URL for playback
@@ -56,7 +65,7 @@ const Videos: React.FC = () => {
     if (video.video_source === 'youtube' && video.youtube_url) {
       return video.youtube_url;
     } else if (video.video_source === 'local' && video.video_file_path) {
-      return `http://localhost:3003${video.video_file_path}`;
+      return `http://localhost:3001${video.video_file_path}`;
     }
     return null;
   };
@@ -243,10 +252,29 @@ const Videos: React.FC = () => {
 
       // Add form fields
       Object.keys(data).forEach(key => {
-        if (key !== 'is_active' && key !== 'duration' && key !== 'video_source') {
+        // Skip special fields that are handled separately
+        if (key === 'is_active' || key === 'duration' || key === 'video_source') {
+          if (key === 'is_active') {
+            formData.append(key, data[key] === 'true' || data[key] === true);
+          }
+          return;
+        }
+
+        // IMPORTANT: Skip thumbnail_url if a thumbnail file is being uploaded
+        // This ensures uploaded files take priority over URL fields
+        if (key === 'thumbnail_url' && thumbnailFile) {
+          console.log('Skipping thumbnail_url because thumbnail file is being uploaded');
+          return;
+        }
+
+        // IMPORTANT: For YouTube videos, skip youtube_url if it's empty
+        // For local videos, we don't need youtube_url at all
+        if (key === 'youtube_url' && videoSource === 'local') {
+          return;
+        }
+
+        if (data[key] !== undefined && data[key] !== null && data[key] !== '') {
           formData.append(key, data[key]);
-        } else if (key === 'is_active') {
-          formData.append(key, data[key] === 'true' || data[key] === true);
         }
       });
 
@@ -258,11 +286,13 @@ const Videos: React.FC = () => {
 
       // Add thumbnail file if selected
       if (thumbnailFile) {
+        console.log('Uploading thumbnail file:', thumbnailFile.name);
         formData.append('thumbnailFile', thumbnailFile);
       }
 
       // Add video file if selected (for local uploads)
       if (videoFile && videoSource === 'local') {
+        console.log('Uploading video file:', videoFile.name);
         formData.append('videoFile', videoFile);
       }
 
@@ -793,12 +823,29 @@ const Videos: React.FC = () => {
                   </div>
                 )}
                 {thumbnailPreview && (
-                  <div className="mt-2">
-                    <img
-                      src={thumbnailPreview}
-                      alt="Thumbnail preview"
-                      className="w-32 h-24 object-cover rounded border border-gray-300"
-                    />
+                  <div className="mt-3">
+                    <p className="text-sm font-medium text-gray-700 mb-2">Preview:</p>
+                    <div className="relative inline-block">
+                      <img
+                        src={thumbnailPreview}
+                        alt="Thumbnail preview"
+                        className="w-40 h-28 object-cover rounded-lg shadow-md border-2 border-gray-200"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setThumbnailFile(null);
+                          setThumbnailPreview('');
+                          if (thumbnailFileRef.current) {
+                            thumbnailFileRef.current.value = '';
+                          }
+                        }}
+                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors shadow-lg"
+                        title="Remove thumbnail"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
                   </div>
                 )}
                 <p className="text-gray-500 text-sm mt-1">

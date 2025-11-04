@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Book, Play } from 'lucide-react';
-import { MediaItem } from '../services/api';
+import { MediaItem, getImageUrl } from '../services/api';
 
 interface BillboardProps {
   latestContent: MediaItem[];
@@ -18,53 +18,81 @@ const Billboard: React.FC<BillboardProps> = ({
 }) => {
   if (!latestContent.length) return null;
   
-  const getMediaType = (item: MediaItem) => {
-    if (item.pdf_url) return 'pdf';
+  const getMediaType = (item: MediaItem): 'pdf' | 'audio' | 'video' => {
+    // Check for audio first
     if (item.audio_file_path) return 'audio';
-    if (item.youtube_id) return 'video';
-    return 'unknown';
+
+    // Check for video
+    if (item.video_file_path || item.youtube_url || item.youtube_id) return 'video';
+
+    // Default to PDF/book (check file_url or pdf_url)
+    return 'pdf';
   };
 
   const getButtonText = (item: MediaItem) => {
-    if (item.pdf_url) return 'Read';
-    if (item.audio_file_path) return 'Play';
-    if (item.youtube_id) return 'Play';
+    const type = getMediaType(item);
+    if (type === 'pdf') return 'Read';
+    if (type === 'audio' || type === 'video') return 'Play';
     return 'View';
   };
 
   const getButtonIcon = (item: MediaItem) => {
-    if (item.pdf_url) return <Book size={16} />;
-    if (item.audio_file_path) return <Play size={16} />;
-    if (item.youtube_id) return <Play size={16} />;
+    const type = getMediaType(item);
+    if (type === 'pdf') return <Book size={16} />;
     return <Play size={16} />;
   };
 
   const getBestThumbnailUrl = (item: MediaItem) => {
-    // For videos: prioritize local uploaded thumbnails over YouTube thumbnails
-    if (item.youtube_id) {
+    // For videos: prioritize YouTube thumbnails and local uploads
+    if (item.youtube_id || item.youtube_url) {
+      // Check if thumbnail_url is a YouTube URL
+      if (item.thumbnail_url && (item.thumbnail_url.includes('youtube.com/vi/') || item.thumbnail_url.includes('ytimg.com/vi/'))) {
+        // Extract video ID from YouTube thumbnail URL
+        const videoId = item.thumbnail_url.match(/vi\/([^\/]+)/)?.[1];
+        if (videoId) {
+          return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+        }
+      }
+
       // Check if thumbnail_url is a local upload (starts with /public/)
       if (item.thumbnail_url && item.thumbnail_url.startsWith('/public/')) {
+        return getImageUrl(item.thumbnail_url);
+      }
+
+      // Check if it's a full URL to an uploaded thumbnail
+      if (item.thumbnail_url && item.thumbnail_url.startsWith('http')) {
         return item.thumbnail_url;
       }
-      // Use YouTube thumbnail as fallback
-      if (item.thumbnail_url && !item.thumbnail_url.startsWith('/public/')) {
-        return item.thumbnail_url;
+
+      // Generate YouTube thumbnail from youtube_id
+      if (item.youtube_id) {
+        return `https://i.ytimg.com/vi/${item.youtube_id}/hqdefault.jpg`;
       }
-      // Generate YouTube thumbnail if no thumbnail_url exists
-      return `https://img.youtube.com/vi/${item.youtube_id}/maxresdefault.jpg`;
+
+      // Extract YouTube ID from URL if available
+      if (item.youtube_url) {
+        const match = item.youtube_url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
+        if (match && match[1]) {
+          return `https://i.ytimg.com/vi/${match[1]}/hqdefault.jpg`;
+        }
+      }
     }
 
-    // For books and other media: use cover_image_url first, then thumbnail_url
-    if (item.cover_image_url) {
-      return item.cover_image_url;
+    // For books and audiobooks: use cover_image_url first, then thumbnail_url
+    if (item.cover_image_url && item.cover_image_url.trim() !== '') {
+      return getImageUrl(item.cover_image_url);
     }
 
-    if (item.thumbnail_url) {
-      return item.thumbnail_url;
+    if (item.thumbnail_url && item.thumbnail_url.trim() !== '') {
+      return getImageUrl(item.thumbnail_url);
     }
 
-    // Final fallback
-    return 'https://images.pexels.com/photos/1366919/pexels-photo-1366919.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop';
+    // Final fallback - use different images for different media types
+    if (item.youtube_id || item.youtube_url) {
+      return '';
+    } else {
+      return '';
+    }
   };
 
   return (

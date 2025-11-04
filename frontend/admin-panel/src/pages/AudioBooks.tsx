@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Edit, Trash2, Search, Upload, File, AlertCircle, CheckCircle, Eye } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, Upload, File, AlertCircle, CheckCircle, Eye, X } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { audioBooksApi } from '../services/api';
 import AudioPreview from '../components/AudioPreview';
@@ -20,6 +20,7 @@ const AudioBooks: React.FC = () => {
   const [uploadError, setUploadError] = useState<string>('');
   const [showPreview, setShowPreview] = useState(false);
   const [previewData, setPreviewData] = useState<any>(null);
+  const [coverPreviewUrl, setCoverPreviewUrl] = useState<string>('');
 
   const audioFileRef = useRef<HTMLInputElement>(null);
   const coverFileRef = useRef<HTMLInputElement>(null);
@@ -87,10 +88,18 @@ const AudioBooks: React.FC = () => {
       if (error) {
         setUploadError(error);
         setSelectedCoverFile(null);
+        setCoverPreviewUrl('');
         return;
       }
       setSelectedCoverFile(file);
       setUploadError('');
+
+      // Create preview URL for the selected cover image
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setCoverPreviewUrl(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -134,7 +143,7 @@ const AudioBooks: React.FC = () => {
       );
 
       // Add authorization header if needed
-      const token = localStorage.getItem('adminToken');
+      const token = localStorage.getItem('authToken');
       if (token) {
         xhr.setRequestHeader('Authorization', `Bearer ${token}`);
       }
@@ -157,11 +166,11 @@ const AudioBooks: React.FC = () => {
 
     // If it's a local path starting with /public, prepend backend URL
     if (imageUrl.startsWith('/public')) {
-      return `http://localhost:3003${imageUrl}`;
+      return `http://localhost:3001${imageUrl}`;
     }
 
-    // Otherwise, treat as backend-relative path
-    return `http://localhost:3003${imageUrl.startsWith('/') ? imageUrl : '/' + imageUrl}`;
+    // Default: assume it's a relative path to images (same logic as user panel)
+    return `http://localhost:3001${imageUrl.startsWith('/') ? imageUrl : '/public/images/' + imageUrl}`;
   };
 
   useEffect(() => {
@@ -193,9 +202,25 @@ const AudioBooks: React.FC = () => {
     try {
       const formData = new FormData();
 
+      // Check if cover file is being uploaded
+      const hasSelectedCoverFile = (data.coverFile && data.coverFile[0]) || selectedCoverFile;
+
       // Append form fields
       Object.keys(data).forEach(key => {
-        if (key !== 'audio' && key !== 'coverFile' && data[key] !== undefined && data[key] !== '') {
+        // Skip file input fields
+        if (key === 'audio' || key === 'coverFile') {
+          return;
+        }
+
+        // IMPORTANT: Skip cover_image_url if a cover file is being uploaded
+        // This ensures uploaded files take priority over URL fields
+        if (key === 'cover_image_url' && hasSelectedCoverFile) {
+          console.log('Skipping cover_image_url because cover file is being uploaded');
+          return;
+        }
+
+        // Append field if it has a value
+        if (data[key] !== undefined && data[key] !== '') {
           formData.append(key, data[key]);
         }
       });
@@ -209,8 +234,10 @@ const AudioBooks: React.FC = () => {
 
       // Append cover image file if provided
       if (data.coverFile && data.coverFile[0]) {
+        console.log('Uploading cover file from form data:', data.coverFile[0].name);
         formData.append('coverFile', data.coverFile[0]);
       } else if (selectedCoverFile) {
+        console.log('Uploading selected cover file:', selectedCoverFile.name);
         formData.append('coverFile', selectedCoverFile);
       }
 
@@ -262,6 +289,7 @@ const AudioBooks: React.FC = () => {
     setEditingAudioBook(null);
     setSelectedAudioFile(null);
     setSelectedCoverFile(null);
+    setCoverPreviewUrl('');
     setUploadError('');
     setUploadStatus('');
     setUploadProgress(0);
@@ -553,6 +581,32 @@ const AudioBooks: React.FC = () => {
                       <span className="text-xs text-gray-500">
                         ({formatFileSize(selectedCoverFile.size)})
                       </span>
+                    </div>
+                  </div>
+                )}
+                {coverPreviewUrl && (
+                  <div className="mt-3">
+                    <p className="text-sm font-medium text-gray-700 mb-2">Preview:</p>
+                    <div className="relative inline-block">
+                      <img
+                        src={coverPreviewUrl}
+                        alt="Cover preview"
+                        className="w-40 h-56 object-cover rounded-lg shadow-md border-2 border-gray-200"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedCoverFile(null);
+                          setCoverPreviewUrl('');
+                          if (coverFileRef.current) {
+                            coverFileRef.current.value = '';
+                          }
+                        }}
+                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors shadow-lg"
+                        title="Remove cover image"
+                      >
+                        <X size={16} />
+                      </button>
                     </div>
                   </div>
                 )}

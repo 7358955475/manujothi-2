@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Play, Pause, Volume2, VolumeX, Maximize, SkipBack, SkipForward } from 'lucide-react';
+import { getVideoUrl, getImageUrl } from '../services/api';
 
 interface VideoPlayerProps {
   video: {
@@ -121,21 +122,33 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose }) => {
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  const getVideoUrl = () => {
-    if (video.video_source === 'local' && video.video_file_path) {
-      return `http://localhost:3001${video.video_file_path}`;
-    } else if (video.video_source === 'youtube' && video.youtube_url) {
-      return video.youtube_url;
-    }
-    return '';
-  };
-
   const getVideoSrc = () => {
+    console.log('[VideoPlayer] Getting video source:', {
+      video_source: video.video_source,
+      youtube_id: video.youtube_id,
+      youtube_url: video.youtube_url,
+      video_file_path: video.video_file_path
+    });
+
     if (video.video_source === 'local' && video.video_file_path) {
-      return `http://localhost:3001${video.video_file_path}`;
+      const localUrl = getVideoUrl(video.video_file_path);
+      console.log('[VideoPlayer] Using local video URL:', localUrl);
+      return localUrl;
     } else if (video.video_source === 'youtube' && video.youtube_id) {
-      return `https://www.youtube.com/embed/${video.youtube_id}?autoplay=1&rel=0`;
+      const embedUrl = `https://www.youtube.com/embed/${video.youtube_id}?autoplay=1&rel=0&origin=${window.location.origin}`;
+      console.log('[VideoPlayer] Using YouTube embed URL:', embedUrl);
+      return embedUrl;
+    } else if (video.youtube_url) {
+      // Fallback: try to extract youtube_id from youtube_url
+      const match = video.youtube_url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
+      if (match && match[1]) {
+        const embedUrl = `https://www.youtube.com/embed/${match[1]}?autoplay=1&rel=0&origin=${window.location.origin}`;
+        console.log('[VideoPlayer] Extracted YouTube ID from URL, using embed:', embedUrl);
+        return embedUrl;
+      }
     }
+
+    console.error('[VideoPlayer] No valid video source found!');
     return '';
   };
 
@@ -167,8 +180,14 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose }) => {
                 title={video.title}
                 className="absolute inset-0 w-full h-full"
                 frameBorder="0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 allowFullScreen
+                sandbox="allow-scripts allow-same-origin allow-presentation allow-forms"
+                onLoad={() => console.log('[VideoPlayer] YouTube iframe loaded successfully')}
+                onError={(e) => {
+                  console.error('[VideoPlayer] YouTube iframe failed to load:', e);
+                  alert('Failed to load YouTube video. Please check:\n1. Your internet connection\n2. If YouTube is accessible\n3. Browser extensions blocking the video');
+                }}
               />
             </div>
           ) : (
@@ -179,7 +198,12 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose }) => {
                 className="w-full h-auto max-h-[70vh]"
                 onPlay={() => setIsPlaying(true)}
                 onPause={() => setIsPlaying(false)}
-                poster={video.thumbnail_url}
+                poster={getImageUrl(video.thumbnail_url)}
+                crossOrigin="anonymous"
+                onError={(e) => {
+                  console.error('Video loading error:', e);
+                  alert('Failed to load video file. Please check if the file exists.');
+                }}
               />
 
               {/* Custom Controls */}

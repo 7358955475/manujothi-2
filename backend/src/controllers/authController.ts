@@ -19,7 +19,7 @@ const logFailedLogin = async (email: string, ip: string, userAgent: string, reas
 export const login = async (req: Request, res: Response): Promise<void> => {
   const ip = req.ip || req.connection.remoteAddress || 'unknown';
   const userAgent = req.get('User-Agent') || 'unknown';
-  
+
   try {
     const { email, password } = req.body;
 

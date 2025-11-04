@@ -107,7 +107,7 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({
       // Note: thumbnailFile is handled by handleThumbnailChange with FileReader
     } else if (previewData.video_source === 'youtube' && previewData.youtube_url) {
       // Use YouTube thumbnail if no custom thumbnail
-      setThumbnailPreview(`https://img.youtube.com/vi/${extractYouTubeId(previewData.youtube_url)}/maxresdefault.jpg`);
+      setThumbnailPreview(`https://img.youtube.com/vi/${extractYouTubeId(previewData.youtube_url)}/hqdefault.jpg`);
     } else if (previewData.video_source === 'local' && previewData.videoFile) {
       // Generate thumbnail from local video only if no custom thumbnail
       const newObjectUrl = URL.createObjectURL(previewData.videoFile);
@@ -308,7 +308,7 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({
                     >
                       <div className="text-center w-full h-full relative">
                         <img
-                          src={`https://img.youtube.com/vi/${extractYouTubeId(previewData.youtube_url)}/maxresdefault.jpg`}
+                          src={`https://img.youtube.com/vi/${extractYouTubeId(previewData.youtube_url)}/hqdefault.jpg`}
                           alt="YouTube thumbnail"
                           className="absolute inset-0 w-full h-full object-cover rounded"
                           onError={(e) => {

@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { Search, Filter, Play, Clock, ChevronLeft, Video, Youtube, Film, Heart } from 'lucide-react';
-import { MediaItem } from '../services/api';
+import { MediaItem, getImageUrl } from '../services/api';
 import LazyImage from '../components/LazyImage';
-import { useFavorites } from '../hooks/useFavorites';
+import { useFavoritesImproved } from '../hooks/useFavoritesImproved';
 
 interface VideoPageProps {
   videos: MediaItem[];
@@ -16,7 +16,7 @@ const VideoPage: React.FC<VideoPageProps> = ({ videos, onMediaClick, onBack }) =
   const [selectedLanguage, setSelectedLanguage] = useState('all');
   const [selectedSource, setSelectedSource] = useState('all');
   const [sortBy, setSortBy] = useState('latest');
-  const { isFavorited, toggleFavorite } = useFavorites();
+  const { isFavorited, toggleFavorite } = useFavoritesImproved();
 
   // Handle favorite button click
   const handleFavoriteClick = async (e: React.MouseEvent, video: MediaItem) => {
@@ -85,6 +85,45 @@ const VideoPage: React.FC<VideoPageProps> = ({ videos, onMediaClick, onBack }) =
       return `${hours}h ${minutes}m`;
     }
     return `${minutes}m`;
+  };
+
+  // Helper function to get the best thumbnail URL for a video
+  const getBestThumbnailUrl = (video: MediaItem): string => {
+    // First check for YouTube thumbnail URL from database (any YouTube domain)
+    if (video.thumbnail_url && (video.thumbnail_url.includes('youtube.com/vi/') || video.thumbnail_url.includes('ytimg.com/vi/'))) {
+      // Extract video ID from any YouTube thumbnail URL format
+      const videoId = video.thumbnail_url.match(/vi\/([^\/]+)/)?.[1];
+      if (videoId) {
+        return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+      }
+      return video.thumbnail_url;
+    }
+
+    // Check if thumbnail_url is a local upload (starts with /public/)
+    if (video.thumbnail_url && video.thumbnail_url.startsWith('/public/')) {
+      return getImageUrl(video.thumbnail_url);
+    }
+
+    // Check if it's a full URL to an uploaded thumbnail
+    if (video.thumbnail_url && video.thumbnail_url.startsWith('http')) {
+      return video.thumbnail_url;
+    }
+
+    // Generate YouTube thumbnail from youtube_id
+    if (video.youtube_id) {
+      return `https://i.ytimg.com/vi/${video.youtube_id}/hqdefault.jpg`;
+    }
+
+    // Extract YouTube ID from URL if available
+    if (video.youtube_url) {
+      const match = video.youtube_url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
+      if (match && match[1]) {
+        return `https://i.ytimg.com/vi/${match[1]}/hqdefault.jpg`;
+      }
+    }
+
+    // Final fallback - empty string to show fallback UI
+    return '';
   };
 
   const getSourceIcon = (source: string) => {
@@ -233,7 +272,7 @@ const VideoPage: React.FC<VideoPageProps> = ({ videos, onMediaClick, onBack }) =
                 {/* Thumbnail */}
                 <div className="relative aspect-video overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200">
                   <LazyImage
-                    src={video.thumbnail_url || ''}
+                    src={getBestThumbnailUrl(video)}
                     alt={video.title}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     fallback=""
@@ -241,7 +280,7 @@ const VideoPage: React.FC<VideoPageProps> = ({ videos, onMediaClick, onBack }) =
                     sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
                     priority={false}
                   />
-                  {!video.thumbnail_url && (
+                  {!getBestThumbnailUrl(video) && (
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                       <Video size={48} className="text-gray-400" />
                     </div>

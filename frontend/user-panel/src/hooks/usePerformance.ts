@@ -9,6 +9,7 @@ interface PerformanceMetrics {
 export const usePerformance = (componentName: string) => {
   const startTime = useRef<number>(performance.now());
   const metricsRef = useRef<PerformanceMetrics>({ loadTime: 0, renderTime: 0 });
+  const componentNameRef = useRef(componentName);
 
   const measureRender = useCallback(() => {
     const renderEnd = performance.now();
@@ -17,14 +18,14 @@ export const usePerformance = (componentName: string) => {
     // Log performance metrics in development
     if (process.env.NODE_ENV === 'development') {
       const perfMemory = (performance as PerformanceNavigationTiming & { memory?: { usedJSHeapSize: number } }).memory;
-      console.log(`[Performance] ${componentName}:`, {
+      console.log(`[Performance] ${componentNameRef.current}:`, {
         renderTime: `${metricsRef.current.renderTime.toFixed(2)}ms`,
         memoryUsage: perfMemory ? 
           `${(perfMemory.usedJSHeapSize / 1024 / 1024).toFixed(2)}MB` : 
           'N/A'
       });
     }
-  }, [componentName]);
+  }, []);
 
   useEffect(() => {
     measureRender();
@@ -32,9 +33,9 @@ export const usePerformance = (componentName: string) => {
 
   const logCustomMetric = useCallback((metricName: string, value: number) => {
     if (process.env.NODE_ENV === 'development') {
-      console.log(`[Performance] ${componentName} - ${metricName}:`, `${value.toFixed(2)}ms`);
+      console.log(`[Performance] ${componentNameRef.current} - ${metricName}:`, `${value.toFixed(2)}ms`);
     }
-  }, [componentName]);
+  }, []);
 
   return { logCustomMetric, metrics: metricsRef.current };
 };

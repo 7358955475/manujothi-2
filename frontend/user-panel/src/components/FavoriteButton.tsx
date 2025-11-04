@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { Heart } from 'lucide-react';
-import { useFavorites } from '../hooks/useFavorites';
+import { useFavoritesImproved } from '../hooks/useFavoritesImproved';
 
 interface FavoriteButtonProps {
   mediaType: 'book' | 'audio' | 'video';
@@ -20,7 +20,7 @@ const FavoriteButton: React.FC<FavoriteButtonProps> = ({
   ariaLabel
 }) => {
   const [isProcessing, setIsProcessing] = useState(false);
-  const { isFavorited, toggleFavorite } = useFavorites();
+  const { isFavorited, toggleFavorite } = useFavoritesImproved();
 
   // Prevent rapid clicks with local state
   const handleClick = useCallback(async (e: React.MouseEvent) => {

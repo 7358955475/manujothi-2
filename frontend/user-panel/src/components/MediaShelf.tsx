@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Book, Headphones, Play, ChevronDown, ChevronLeft, ChevronRight, Heart } from 'lucide-react';
 import { MediaItem } from '../services/api';
 import LazyImage from './LazyImage';
-import { useFavorites } from '../hooks/useFavorites';
+import { useFavoritesImproved } from '../hooks/useFavoritesImproved';
 
 // Helper function to construct proper image URL
 const constructImageUrl = (imagePath: string) => {
@@ -59,7 +59,7 @@ const MediaShelf: React.FC<MediaShelfProps> = ({
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
   const [loadingFavorites, setLoadingFavorites] = useState<Set<string>>(new Set());
-  const { isFavorited, toggleFavorite } = useFavorites();
+  const { isFavorited, toggleFavorite } = useFavoritesImproved();
 
   const handleTouchStart = (e: React.TouchEvent) => {
     setTouchEnd(null);
@@ -118,36 +118,58 @@ const MediaShelf: React.FC<MediaShelfProps> = ({
   };
 
   const getBestThumbnailUrl = (item: MediaItem, mediaType: string) => {
-    // For videos: prioritize local uploaded thumbnails over YouTube thumbnails
+    // For videos: prioritize YouTube thumbnails and local uploads
     if (mediaType === 'video') {
+      // First check for YouTube thumbnail URL from database (any YouTube domain)
+      if (item.thumbnail_url && (item.thumbnail_url.includes('youtube.com/vi/') || item.thumbnail_url.includes('ytimg.com/vi/'))) {
+        // Extract video ID from any YouTube thumbnail URL format
+        const videoId = item.thumbnail_url.match(/vi\/([^\/]+)/)?.[1];
+        if (videoId) {
+          // Use hqdefault which is reliably available for all YouTube videos
+          return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+        }
+        return item.thumbnail_url;
+      }
+
       // Check if thumbnail_url is a local upload (starts with /public/)
       if (item.thumbnail_url && item.thumbnail_url.startsWith('/public/')) {
+        return constructImageUrl(item.thumbnail_url);
+      }
+
+      // Check if it's a full URL to an uploaded thumbnail
+      if (item.thumbnail_url && item.thumbnail_url.startsWith('http')) {
         return item.thumbnail_url;
       }
-      // Use YouTube thumbnail as fallback
-      if (item.thumbnail_url && !item.thumbnail_url.startsWith('/public/')) {
-        return item.thumbnail_url;
-      }
-      // Generate YouTube thumbnail if no thumbnail_url exists
+
+      // Generate YouTube thumbnail from youtube_id
       if (item.youtube_id) {
-        return `https://img.youtube.com/vi/${item.youtube_id}/maxresdefault.jpg`;
+        return `https://i.ytimg.com/vi/${item.youtube_id}/hqdefault.jpg`;
+      }
+
+      // Extract YouTube ID from URL if available
+      if (item.youtube_url) {
+        const match = item.youtube_url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
+        if (match && match[1]) {
+          return `https://i.ytimg.com/vi/${match[1]}/hqdefault.jpg`;
+        }
       }
     }
 
     // For books and other media: use cover_image_url first, then thumbnail_url
-    if (item.cover_image_url) {
-      return item.cover_image_url;
+    // IMPORTANT: Use constructImageUrl to handle local uploads correctly
+    if (item.cover_image_url && item.cover_image_url.trim() !== '') {
+      return constructImageUrl(item.cover_image_url);
     }
 
-    if (item.thumbnail_url) {
-      return item.thumbnail_url;
+    if (item.thumbnail_url && item.thumbnail_url.trim() !== '') {
+      return constructImageUrl(item.thumbnail_url);
     }
 
     // Final fallback - use different images for different media types
     if (mediaType === 'video') {
-      return "https://images.pexels.com/photos/1366919/pexels-photo-1366919.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop";
+      return "";
     } else {
-      return "https://images.pexels.com/photos/1130980/pexels-photo-1130980.jpeg?auto=compress&cs=tinysrgb&w=300&h=400&fit=crop";
+      return "";
     }
   };
 
@@ -257,8 +279,8 @@ const MediaShelf: React.FC<MediaShelfProps> = ({
                   alt={item.title}
                   className="w-full h-32 sm:h-48 object-cover rounded-lg mb-2 sm:mb-3"
                   fallback={shelfMediaType === 'video'
-                    ? "https://images.pexels.com/photos/1366919/pexels-photo-1366919.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop"
-                    : "https://images.pexels.com/photos/1130980/pexels-photo-1130980.jpeg?auto=compress&cs=tinysrgb&w=300&h=400&fit=crop"
+                    ? ""
+                    : ""
                   }
                   autoSize={false}
                   aspectRatio={shelfMediaType === 'video' ? '16/9' : '3/4'}

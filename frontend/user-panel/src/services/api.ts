@@ -4,6 +4,7 @@ import { dataCache } from '../utils/cache';
 import { SecurityUtils } from '../utils/security';
 
 const API_BASE_URL = 'http://localhost:3001/api';
+const MEDIA_BASE_URL = 'http://localhost:3001';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -37,13 +38,13 @@ api.interceptors.response.use(
       console.log(`[API] ${response.config.method?.toUpperCase()} ${response.config.url} - ${duration.toFixed(2)}ms`);
     }
     
-    // Cache GET responses for media endpoints
-    if (response.config.method === 'get' && 
-        (response.config.url?.includes('/books') || 
-         response.config.url?.includes('/audio-books') || 
+    // Cache GET responses for media endpoints with shorter duration
+    if (response.config.method === 'get' &&
+        (response.config.url?.includes('/books') ||
+         response.config.url?.includes('/audio-books') ||
          response.config.url?.includes('/videos'))) {
       const cacheKey = `api-${response.config.url}-${JSON.stringify(response.config.params)}`;
-      dataCache.set(cacheKey, response.data, 2 * 60 * 1000); // 2 minutes
+      dataCache.set(cacheKey, response.data, 30 * 1000); // 30 seconds - allows quicker updates
     }
     
     return response;
@@ -201,6 +202,81 @@ export const authApi = {
     api.post('/auth/login', { email, password }),
   register: (data: RegisterRequest): Promise<{ data: AuthResponse }> =>
     api.post('/auth/register', data),
+};
+
+// Helper functions for media URLs
+export const getMediaUrl = (path: string | null | undefined): string => {
+  if (!path) return '';
+  
+  // If it's already a full URL, return as is
+  if (path.startsWith('http')) {
+    return path;
+  }
+  
+  // If it starts with /public, use it directly
+  if (path.startsWith('/public')) {
+    return `${MEDIA_BASE_URL}${path}`;
+  }
+  
+  // If it's an absolute file system path, extract filename and construct proper URL
+  if (path.startsWith('/home/') || path.startsWith('/Users/')) {
+    const fileName = path.split('/').pop();
+    return `${MEDIA_BASE_URL}/public/audio/${fileName}`;
+  }
+  
+  // Default: assume it's a relative path
+  return `${MEDIA_BASE_URL}${path.startsWith('/') ? path : '/' + path}`;
+};
+
+export const getImageUrl = (imageUrl: string | null | undefined): string => {
+  if (!imageUrl) return '';
+  
+  // If it's already a full URL, return as is
+  if (imageUrl.startsWith('http')) {
+    return imageUrl;
+  }
+  
+  // If it starts with /public, use it directly
+  if (imageUrl.startsWith('/public')) {
+    return `${MEDIA_BASE_URL}${imageUrl}`;
+  }
+  
+  // Default: assume it's a relative path to images
+  return `${MEDIA_BASE_URL}${imageUrl.startsWith('/') ? imageUrl : '/public/images/' + imageUrl}`;
+};
+
+export const getPdfUrl = (pdfPath: string | null | undefined): string => {
+  if (!pdfPath) return '';
+  
+  // If it's already a full URL, return as is
+  if (pdfPath.startsWith('http')) {
+    return pdfPath;
+  }
+  
+  // If it starts with /public, use it directly
+  if (pdfPath.startsWith('/public')) {
+    return `${MEDIA_BASE_URL}${pdfPath}`;
+  }
+  
+  // Default: assume it's a relative path to PDFs
+  return `${MEDIA_BASE_URL}${pdfPath.startsWith('/') ? pdfPath : '/public/pdfs/' + pdfPath}`;
+};
+
+export const getVideoUrl = (videoPath: string | null | undefined): string => {
+  if (!videoPath) return '';
+  
+  // If it's already a full URL, return as is
+  if (videoPath.startsWith('http')) {
+    return videoPath;
+  }
+  
+  // If it starts with /public, use it directly
+  if (videoPath.startsWith('/public')) {
+    return `${MEDIA_BASE_URL}${videoPath}`;
+  }
+  
+  // Default: assume it's a relative path to videos
+  return `${MEDIA_BASE_URL}${videoPath.startsWith('/') ? videoPath : '/public/videos/' + videoPath}`;
 };
 
 export default api;

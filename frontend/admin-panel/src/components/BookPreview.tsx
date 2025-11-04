@@ -44,6 +44,10 @@ const BookPreview: React.FC<BookPreviewProps> = ({
   const [rotation, setRotation] = useState(0);
   const [pdfError, setPdfError] = useState<string>('');
   const [showPdfViewer, setShowPdfViewer] = useState(false);
+  const [textContent, setTextContent] = useState<string>('');
+  const [isTextLoading, setIsTextLoading] = useState(false);
+  const [textError, setTextError] = useState<string>('');
+  const [showTextViewer, setShowTextViewer] = useState(false);
 
   const coverFileRef = useRef<HTMLInputElement>(null);
 
@@ -109,7 +113,13 @@ const BookPreview: React.FC<BookPreviewProps> = ({
     if (previewData.bookFile) {
       const newObjectUrl = URL.createObjectURL(previewData.bookFile);
       setPdfObjectUrl(newObjectUrl);
-      loadPdfPages(previewData.bookFile);
+
+      const extension = previewData.bookFile.name.toLowerCase().split('.').pop();
+      if (extension === 'pdf' || previewData.bookFile.type === 'application/pdf') {
+        loadPdfPages(previewData.bookFile);
+      } else if (extension === 'txt' || previewData.bookFile.type === 'text/plain') {
+        loadTextContent(previewData.bookFile);
+      }
     } else if (previewData.cover_url) {
       // Use existing cover URL
       setCoverPreview(getImageUrl(previewData.cover_url));
@@ -117,12 +127,15 @@ const BookPreview: React.FC<BookPreviewProps> = ({
   }, [previewData]);
 
   const analyzeBookFile = async (file: File) => {
-    if (file.type === 'application/pdf') {
+    const extension = file.name.toLowerCase().split('.').pop();
+
+    if (file.type === 'application/pdf' || extension === 'pdf') {
       await loadPdfPages(file);
+    } else if (extension === 'txt' || file.type === 'text/plain') {
+      await loadTextContent(file);
     }
 
     // Update file format based on file
-    const extension = file.name.toLowerCase().split('.').pop();
     const format = fileFormats.find(f => f.value === extension);
     if (format) {
       setEditedData(prev => ({
@@ -130,6 +143,30 @@ const BookPreview: React.FC<BookPreviewProps> = ({
         fileFormat: format.value
       }));
     }
+  };
+
+  const loadTextContent = async (file: File) => {
+    setIsTextLoading(true);
+    setTextError('');
+    setTextContent('');
+
+    try {
+      const text = await file.text();
+      setTextContent(text);
+      setIsTextLoading(false);
+    } catch (error) {
+      console.error('Error loading text file:', error);
+      setTextError('Failed to load text file');
+      setIsTextLoading(false);
+    }
+  };
+
+  const openTextViewer = () => {
+    setShowTextViewer(true);
+  };
+
+  const closeTextViewer = () => {
+    setShowTextViewer(false);
   };
 
   const loadPdfPages = async (file: File) => {
@@ -441,6 +478,42 @@ const BookPreview: React.FC<BookPreviewProps> = ({
                     {pdfError && (
                       <p className="mt-1 text-xs text-red-600 text-center">{pdfError}</p>
                     )}
+                  </div>
+                )}
+
+                {/* Text Content Preview */}
+                {(previewData.fileFormat === 'txt' && textContent) && (
+                  <div className="w-full max-w-md">
+                    <div className="bg-white rounded-lg shadow-md border border-gray-300 overflow-hidden">
+                      <div className="bg-gray-100 px-4 py-2 border-b border-gray-300">
+                        <h4 className="text-sm font-semibold text-gray-700">Text Preview</h4>
+                      </div>
+                      <div className="p-4 max-h-64 overflow-y-auto">
+                        {isTextLoading ? (
+                          <div className="flex items-center justify-center py-8">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                          </div>
+                        ) : (
+                          <div className="text-sm text-gray-700 whitespace-pre-wrap font-mono leading-relaxed">
+                            {textContent.substring(0, 500)}
+                            {textContent.length > 500 && '...'}
+                          </div>
+                        )}
+                      </div>
+                      {textContent && textContent.length > 500 && (
+                        <div className="bg-gray-50 px-4 py-2 border-t border-gray-300">
+                          <button
+                            onClick={openTextViewer}
+                            className="w-full text-xs bg-blue-500 text-white px-3 py-2 rounded hover:bg-blue-600 transition-colors"
+                          >
+                            View Full Content ({textContent.length.toLocaleString()} characters)
+                          </button>
+                        </div>
+                      )}
+                      {textError && (
+                        <p className="px-4 py-2 text-xs text-red-600 text-center bg-red-50">{textError}</p>
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -767,6 +840,83 @@ const BookPreview: React.FC<BookPreviewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Text Viewer Modal */}
+      {showTextViewer && (
+        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-lg w-full max-w-6xl h-[95vh] flex flex-col overflow-hidden">
+            {/* Text Viewer Header */}
+            <div className="bg-gray-800 text-white p-4 flex justify-between items-center">
+              <div className="flex items-center gap-4">
+                <FileText size={24} />
+                <h3 className="text-lg font-semibold">Text Book Viewer</h3>
+                <span className="text-sm text-gray-300">
+                  {textContent.length.toLocaleString()} characters
+                </span>
+              </div>
+              <button
+                onClick={closeTextViewer}
+                className="p-2 hover:bg-gray-700 rounded-full transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Text Viewer Controls */}
+            <div className="bg-gray-100 p-3 flex items-center justify-between border-b">
+              <div className="flex items-center gap-2">
+                <Book size={20} className="text-gray-600" />
+                <span className="text-sm text-gray-700 font-medium">{previewData.title}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    const blob = new Blob([textContent], { type: 'text/plain' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${previewData.title || 'book'}.txt`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                  }}
+                  className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors text-sm flex items-center gap-2"
+                >
+                  <Download size={16} />
+                  Download
+                </button>
+              </div>
+            </div>
+
+            {/* Text Content */}
+            <div className="flex-1 overflow-auto bg-white p-6">
+              <div className="max-w-4xl mx-auto">
+                <div className="prose prose-sm max-w-none">
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
+                    <pre className="whitespace-pre-wrap font-serif text-base leading-relaxed text-gray-800">
+                      {textContent}
+                    </pre>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="bg-gray-100 p-4 border-t flex justify-between items-center">
+              <div className="text-sm text-gray-600">
+                Lines: {textContent.split('\n').length} | Words: {textContent.split(/\s+/).length}
+              </div>
+              <button
+                onClick={closeTextViewer}
+                className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* PDF Viewer Modal */}
       {showPdfViewer && (

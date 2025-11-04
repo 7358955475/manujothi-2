@@ -130,9 +130,9 @@ async function createSampleBooks() {
       // Insert into database
       const result = await pool.query(
         `INSERT INTO books (
-          title, author, description, cover_image_url, pdf_url, file_url, file_format, file_size, mime_type,
+          title, author, description, cover_image_url, pdf_url,
           language, genre, published_year, created_by
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING *`,
         [
           book.title,
@@ -140,10 +140,6 @@ async function createSampleBooks() {
           book.description,
           `https://images.pexels.com/photos/3184418/pexels-photo-3184418.jpeg?auto=compress&cs=tinysrgb&w=300&h=400&fit=crop`,
           `/books/${fileName}`,
-          `/books/${fileName}`,
-          book.format,
-          Buffer.byteLength(book.content, 'utf8'),
-          book.format === 'txt' ? 'text/plain' : 'application/octet-stream',
           book.language,
           book.genre,
           book.published_year,

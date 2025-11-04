@@ -184,7 +184,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 >
                   <div className="text-center">
                     <img
-                      src={`https://img.youtube.com/vi/${extractYouTubeId(videoUrl)}/maxresdefault.jpg`}
+                      src={`https://img.youtube.com/vi/${extractYouTubeId(videoUrl)}/hqdefault.jpg`}
                       alt="YouTube thumbnail"
                       className="w-full h-full object-cover rounded"
                       onError={(e) => {

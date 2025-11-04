@@ -54,10 +54,7 @@ export const useFavorites = (): UseFavoritesReturn => {
   // Fetch all favorites with duplicate prevention
   const fetchFavorites = useCallback(async () => {
     try {
-      // Only set loading to true if favorites list is empty (initial load)
-      if (favorites.length === 0) {
-        setIsLoading(true);
-      }
+      setIsLoading(true);
       setError(null);
 
       const response = await favoritesApi.getAll();
@@ -90,7 +87,7 @@ export const useFavorites = (): UseFavoritesReturn => {
     } finally {
       setIsLoading(false);
     }
-  }, [getFavoriteKey, deduplicateFavorites]);
+  }, []);
 
   // Fetch favorites count
   const fetchFavoritesCount = useCallback(async () => {
@@ -120,39 +117,9 @@ export const useFavorites = (): UseFavoritesReturn => {
     try {
       setError(null);
 
-      // For immediate UI feedback, check current status before API call
-      const isCurrentlyFavorited = favoriteStatus[key] || false;
-
-      // If unliking, remove immediately from UI for instant feedback
-      if (isCurrentlyFavorited) {
-        console.log('👎 Immediately removing from favorites for instant feedback...');
-        setFavorites(prev => {
-          // Create a completely new array to ensure React detects the change
-          const filtered = [...prev].filter(item => {
-            const itemMediaType = item.audio_file_path ? 'audio' :
-                                 (item.video_file_path || item.youtube_url) ? 'video' : 'book';
-            return !(item.id === mediaId && itemMediaType === mediaType);
-          });
-
-          // Force a new array reference to trigger React re-render
-          const newFavorites = [...filtered];
-          console.log(`✅ Removed item from favorites list. New count: ${newFavorites.length}`);
-          return newFavorites;
-        });
-
-        // Update favorite status immediately
-        setFavoriteStatus(prev => ({
-          ...prev,
-          [key]: false
-        }));
-
-        // Update count instantly
-        setFavoritesCount(prev => Math.max(0, prev - 1));
-      }
-
       // Make API call
       const response = await favoritesApi.toggle(mediaType, mediaId);
-      const { isFavorited, favorite } = response.data;
+      const { isFavorited } = response.data;
 
       // Update favorites list based on actual server response
       if (isFavorited) {
@@ -172,31 +139,21 @@ export const useFavorites = (): UseFavoritesReturn => {
         // Server confirmed removal - ensure our local state is correct
         console.log('👎 Server confirmed: Removed from favorites');
 
-        // Double-check that item is removed (in case there was any race condition)
-        setFavorites(prev => {
-          const filtered = prev.filter(item => {
-            const itemMediaType = item.audio_file_path ? 'audio' :
-                                 (item.video_file_path || item.youtube_url) ? 'video' : 'book';
-            return !(item.id === mediaId && itemMediaType === mediaType);
-          });
+        // Update favorites list
+        setFavorites(prev => prev.filter(item => {
+          const itemMediaType = item.audio_file_path ? 'audio' :
+                               (item.video_file_path || item.youtube_url) ? 'video' : 'book';
+          return !(item.id === mediaId && itemMediaType === mediaType);
+        }));
 
-          // Remove any duplicates
-          const uniqueItems = filtered.filter((item, index, self) =>
-            index === self.findIndex((t) =>
-              t.id === item.id &&
-              (item.audio_file_path ? 'audio' :
-               item.video_file_path || item.youtube_url ? 'video' : 'book') ===
-              (t.audio_file_path ? 'audio' :
-               t.video_file_path || t.youtube_url ? 'video' : 'book')
-            )
-          );
+        // Update status
+        setFavoriteStatus(prev => ({
+          ...prev,
+          [key]: false
+        }));
 
-          if (uniqueItems.length !== filtered.length) {
-            console.log(`🧹 Cleaned ${filtered.length - uniqueItems.length} duplicates during removal`);
-          }
-
-          return uniqueItems;
-        });
+        // Update count
+        setFavoritesCount(prev => Math.max(0, prev - 1));
       }
 
     } catch (err: any) {
@@ -208,7 +165,7 @@ export const useFavorites = (): UseFavoritesReturn => {
     } finally {
       pendingOperations.current.delete(key);
     }
-  }, [getFavoriteKey, fetchFavorites, favoriteStatus]);
+  }, []);
 
   // Add favorite
   const addFavorite = useCallback(async (mediaType: 'book' | 'audio' | 'video', mediaId: string) => {
@@ -230,7 +187,7 @@ export const useFavorites = (): UseFavoritesReturn => {
       setError(err.response?.data?.error || 'Failed to add favorite');
       console.error('Error adding favorite:', err);
     }
-  }, [getFavoriteKey, fetchFavorites]);
+  }, []);
 
   // Remove favorite
   const removeFavorite = useCallback(async (mediaType: 'book' | 'audio' | 'video', mediaId: string) => {
@@ -256,45 +213,24 @@ export const useFavorites = (): UseFavoritesReturn => {
       setError(err.response?.data?.error || 'Failed to remove favorite');
       console.error('Error removing favorite:', err);
     }
-  }, [getFavoriteKey]);
+  }, []);
 
   // Check if an item is favorited
   const isFavorited = useCallback((mediaType: 'book' | 'audio' | 'video', mediaId: string): boolean => {
     const key = getFavoriteKey(mediaType, mediaId);
     return favoriteStatus[key] || false;
-  }, [favoriteStatus, getFavoriteKey]);
+  }, [favoriteStatus]);
 
   // Refresh favorites (alias for fetchFavorites)
   const refreshFavorites = useCallback(async () => {
     await fetchFavorites();
-  }, [fetchFavorites]);
+  }, []);
 
   // Initialize favorites on mount
   useEffect(() => {
     fetchFavorites();
     fetchFavoritesCount();
-  }, [fetchFavorites, fetchFavoritesCount]);
-
-  // Cleanup duplicates periodically and when favorites array changes
-  useEffect(() => {
-    if (favorites.length > 0) {
-      const uniqueFavorites = deduplicateFavorites(favorites);
-      if (uniqueFavorites.length !== favorites.length) {
-        console.log('🧹 Auto-cleaning duplicates in favorites array');
-        setFavorites(uniqueFavorites);
-      }
-    }
-  }, [favorites.length, deduplicateFavorites]);
-
-  // Debug logging for favorites array changes
-  useEffect(() => {
-    console.log(`📊 Favorites array updated: ${favorites.length} items`);
-    favorites.forEach((item, index) => {
-      const mediaType = item.audio_file_path ? 'audio' :
-                       (item.video_file_path || item.youtube_url) ? 'video' : 'book';
-      console.log(`  ${index + 1}. ${mediaType}-${item.id}: ${item.title}`);
-    });
-  }, [favorites]);
+  }, []);
 
   return {
     favorites,

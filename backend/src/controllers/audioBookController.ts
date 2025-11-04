@@ -111,10 +111,10 @@ export const createAudioBook = async (req: AuthRequest, res: Response): Promise<
     const audio_file_path = files.audioFile[0].path;
     const file_size = files.audioFile[0].size;
 
-    // Handle cover image: either uploaded file or URL from request body
-    let final_cover_image_url = cover_image_url;
+    // Handle cover image: PRIORITIZE uploaded file over URL from request body
+    let final_cover_image_url = null;
 
-    // If a cover file was uploaded, use its path
+    // If a cover file was uploaded, ALWAYS use its path (highest priority)
     if (files?.coverFile && files.coverFile.length > 0) {
       // Convert file path to URL accessible by frontend
       const coverPath = files.coverFile[0].path;
@@ -124,6 +124,9 @@ export const createAudioBook = async (req: AuthRequest, res: Response): Promise<
       if (!final_cover_image_url.startsWith('/')) {
         final_cover_image_url = '/' + final_cover_image_url;
       }
+    } else if (cover_image_url) {
+      // Only use URL from text input if NO file was uploaded
+      final_cover_image_url = cover_image_url;
     }
 
     const result = await pool.query(
@@ -165,10 +168,10 @@ export const updateAudioBook = async (req: AuthRequest, res: Response): Promise<
       is_active
     } = req.body;
 
-  
+
     let audio_file_path = null;
     let file_size = null;
-    let final_cover_image_url = cover_image_url;
+    let final_cover_image_url = undefined; // undefined means "don't update this field"
 
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
 
@@ -190,8 +193,9 @@ export const updateAudioBook = async (req: AuthRequest, res: Response): Promise<
       file_size = files.audioFile[0].size;
     }
 
-    // Handle cover image file upload
+    // Handle cover image: PRIORITIZE uploaded file over URL from request body
     if (files?.coverFile && files.coverFile.length > 0) {
+      // UPLOADED FILE - Always takes priority
       // Get old cover path to delete later
       const oldCoverResult = await pool.query(
         'SELECT cover_image_url FROM audio_books WHERE id = $1',
@@ -214,7 +218,11 @@ export const updateAudioBook = async (req: AuthRequest, res: Response): Promise<
       if (!final_cover_image_url.startsWith('/')) {
         final_cover_image_url = '/' + final_cover_image_url;
       }
+    } else if (cover_image_url !== undefined && cover_image_url !== null && cover_image_url !== '') {
+      // URL FROM TEXT INPUT - Only use if no file was uploaded
+      final_cover_image_url = cover_image_url;
     }
+    // If both are empty/undefined, final_cover_image_url stays undefined (no update)
 
     // Convert string fields to appropriate types
     const durationNum = duration ? (typeof duration === 'string' ? parseInt(duration, 10) : duration) : null;

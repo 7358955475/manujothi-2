@@ -132,7 +132,7 @@ const MediaViewer: React.FC<MediaViewerProps> = ({ selectedMedia, mediaType, onC
           {mediaType === 'audio' && selectedMedia.audio_file_path && (
             <div className="flex flex-col items-center justify-center h-full p-8 bg-gradient-to-br from-orange-50 to-amber-50">
               <img
-                src={constructImageUrl(selectedMedia.cover_image_url) || 'https://images.pexels.com/photos/3184419/pexels-photo-3184419.jpeg?auto=compress&cs=tinysrgb&w=300&h=400&fit=crop'}
+                src={constructImageUrl(selectedMedia.cover_image_url) || ''}
                 alt={selectedMedia.title}
                 className="w-80 h-80 max-w-full max-h-full object-contain rounded-xl mb-8 shadow-2xl border-4 border-white"
                 loading="lazy"

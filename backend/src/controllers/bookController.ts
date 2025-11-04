@@ -104,24 +104,28 @@ export const createBook = async (req: AuthRequest, res: Response): Promise<void>
       published_year
     } = req.body;
 
-    // Handle uploaded files
+    // Handle uploaded files - PRIORITIZE uploaded files over URL text inputs
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
-    let finalPdfUrl = pdf_url;
-    let finalFileUrl = file_url || pdf_url;
-    let finalCoverUrl = cover_image_url;
+    let finalPdfUrl = null;
+    let finalFileUrl = null;
+    let finalCoverUrl = null;
     let finalFileFormat = file_format || 'pdf';
     let finalFileSize = file_size;
     let finalMimeType = mime_type;
 
-    // Set PDF URL from uploaded file if available
+    // Set PDF URL from uploaded file if available (HIGHEST PRIORITY)
     if (files && files.pdfFile && files.pdfFile[0]) {
       finalPdfUrl = `/public/pdfs/${files.pdfFile[0].filename}`;
       finalFileUrl = finalPdfUrl;
       finalFileSize = files.pdfFile[0].size;
       finalMimeType = files.pdfFile[0].mimetype;
+    } else {
+      // Only use URL from text input if NO file was uploaded
+      finalPdfUrl = pdf_url;
+      finalFileUrl = file_url || pdf_url;
     }
 
-    // Handle other book file formats
+    // Handle other book file formats (HIGHEST PRIORITY)
     if (files && files.bookFile && files.bookFile[0]) {
       const uploadedFile = files.bookFile[0];
       finalFileUrl = `/public/books/${uploadedFile.filename}`;
@@ -136,9 +140,12 @@ export const createBook = async (req: AuthRequest, res: Response): Promise<void>
       }
     }
 
-    // Set cover image URL from uploaded file if available
+    // Set cover image URL from uploaded file if available (HIGHEST PRIORITY)
     if (files && files.coverFile && files.coverFile[0]) {
       finalCoverUrl = `/public/images/${files.coverFile[0].filename}`;
+    } else if (cover_image_url) {
+      // Only use URL from text input if NO file was uploaded
+      finalCoverUrl = cover_image_url;
     }
 
     // Set default MIME type if not provided
@@ -194,19 +201,25 @@ export const updateBook = async (req: AuthRequest, res: Response): Promise<void>
       is_active
     } = req.body;
 
-    // Handle uploaded files
+    // Handle uploaded files - PRIORITIZE uploaded files over URL text inputs
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
-    let finalPdfUrl = pdf_url;
-    let finalCoverUrl = cover_image_url;
+    let finalPdfUrl = undefined; // undefined means "don't update"
+    let finalCoverUrl = undefined; // undefined means "don't update"
 
-    // Set PDF URL from uploaded file if available
+    // Set PDF URL from uploaded file if available (HIGHEST PRIORITY)
     if (files && files.pdfFile && files.pdfFile[0]) {
       finalPdfUrl = `/public/pdfs/${files.pdfFile[0].filename}`;
+    } else if (pdf_url !== undefined && pdf_url !== null && pdf_url !== '') {
+      // Only use URL from text input if NO file was uploaded
+      finalPdfUrl = pdf_url;
     }
 
-    // Set cover image URL from uploaded file if available
+    // Set cover image URL from uploaded file if available (HIGHEST PRIORITY)
     if (files && files.coverFile && files.coverFile[0]) {
       finalCoverUrl = `/public/images/${files.coverFile[0].filename}`;
+    } else if (cover_image_url !== undefined && cover_image_url !== null && cover_image_url !== '') {
+      // Only use URL from text input if NO file was uploaded
+      finalCoverUrl = cover_image_url;
     }
 
     const result = await pool.query(

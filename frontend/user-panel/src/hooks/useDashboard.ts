@@ -150,12 +150,27 @@ export const useDashboard = (): UseDashboardReturn => {
   useEffect(() => {
     const initializeDashboard = async () => {
       setIsLoading(true);
-      await refreshDashboard();
-      setIsLoading(false);
+      setIsRefreshing(true);
+      setError(null);
+
+      try {
+        await Promise.all([
+          fetchOverview(),
+          fetchRecentlyViewed(),
+          fetchRecommendations(),
+          fetchProgress()
+        ]);
+      } catch (err) {
+        console.error('Error initializing dashboard:', err);
+      } finally {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
     };
 
     initializeDashboard();
-  }, [refreshDashboard]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run on mount
 
   return {
     // Data

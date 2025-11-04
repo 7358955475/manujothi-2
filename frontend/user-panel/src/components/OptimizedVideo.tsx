@@ -21,9 +21,9 @@ const OptimizedVideo: React.FC<OptimizedVideoProps> = ({
 
   // Generate thumbnail URL with fallback
   const getThumbnailUrl = () => {
-    const baseUrl = 'https://img.youtube.com/vi/';
+    const baseUrl = 'https://i.ytimg.com/vi/';
     // Try multiple thumbnail options in order of preference
-    const thumbnailOptions = ['maxresdefault.jpg', 'hqdefault.jpg', 'mqdefault.jpg', 'default.jpg'];
+    const thumbnailOptions = ['hqdefault.jpg', 'hqdefault.jpg', 'mqdefault.jpg', 'default.jpg'];
     return `${baseUrl}${youtubeId}/${thumbnailOptions[0]}`;
   };
 
@@ -84,7 +84,7 @@ const OptimizedVideo: React.FC<OptimizedVideoProps> = ({
   };
 
   const getFallbackThumbnailUrl = () => {
-    const baseUrl = 'https://img.youtube.com/vi/';
+    const baseUrl = 'https://i.ytimg.com/vi/';
     // Try fallback thumbnail options
     const fallbackOptions = ['hqdefault.jpg', 'mqdefault.jpg', 'default.jpg'];
     for (const option of fallbackOptions) {

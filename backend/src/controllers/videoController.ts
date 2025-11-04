@@ -12,7 +12,9 @@ const extractYouTubeId = (url: string): string => {
 };
 
 const getYouTubeThumbnail = (videoId: string): string => {
-  return `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+  // Use hqdefault.jpg as it's more reliable than maxresdefault.jpg
+  // maxresdefault.jpg may not exist for some videos, but hqdefault.jpg almost always exists
+  return `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
 };
 
 export const getAllVideos = async (req: AuthRequest, res: Response): Promise<void> => {
