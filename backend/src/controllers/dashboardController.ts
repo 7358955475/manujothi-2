@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import pool from '../config/database';
 import { logger } from '../utils/logger';
+import { HybridService } from '../services/recommendation/HybridService';
 
 export class DashboardController {
   // Get recently viewed items for a user
@@ -20,6 +21,11 @@ export class DashboardController {
           ua.media_id,
           ua.created_at as last_viewed,
           CASE
+            WHEN ua.media_type = 'book' THEN b.id
+            WHEN ua.media_type = 'audio' THEN ab.id
+            WHEN ua.media_type = 'video' THEN v.id
+          END as id,
+          CASE
             WHEN ua.media_type = 'book' THEN b.title
             WHEN ua.media_type = 'audio' THEN ab.title
             WHEN ua.media_type = 'video' THEN v.title
@@ -30,10 +36,19 @@ export class DashboardController {
             WHEN ua.media_type = 'video' THEN NULL
           END as author,
           CASE
+            WHEN ua.media_type = 'audio' THEN ab.narrator
+            ELSE NULL
+          END as narrator,
+          CASE
             WHEN ua.media_type = 'book' THEN b.cover_image_url
             WHEN ua.media_type = 'audio' THEN ab.cover_image_url
             WHEN ua.media_type = 'video' THEN v.thumbnail_url
           END as cover_image_url,
+          CASE
+            WHEN ua.media_type = 'book' THEN b.cover_image_url
+            WHEN ua.media_type = 'audio' THEN ab.cover_image_url
+            WHEN ua.media_type = 'video' THEN v.thumbnail_url
+          END as thumbnail_url,
           CASE
             WHEN ua.media_type = 'book' THEN b.language
             WHEN ua.media_type = 'audio' THEN ab.language
@@ -47,13 +62,33 @@ export class DashboardController {
           CASE
             WHEN ua.media_type = 'book' THEN b.pdf_url
             WHEN ua.media_type = 'audio' THEN ab.audio_file_path
-            WHEN ua.media_type = 'video' THEN v.video_file_path
+            WHEN ua.media_type = 'video' THEN COALESCE(v.video_file_path, v.youtube_url)
           END as file_url,
           CASE
             WHEN ua.media_type = 'book' THEN b.pdf_url
             WHEN ua.media_type = 'audio' THEN ab.audio_file_path
-            WHEN ua.media_type = 'video' THEN v.video_file_path
+            WHEN ua.media_type = 'video' THEN COALESCE(v.video_file_path, v.youtube_url)
           END as content_url,
+          CASE
+            WHEN ua.media_type = 'book' THEN b.pdf_url
+            ELSE NULL
+          END as pdf_file_path,
+          CASE
+            WHEN ua.media_type = 'audio' THEN ab.audio_file_path
+            ELSE NULL
+          END as audio_file_path,
+          CASE
+            WHEN ua.media_type = 'video' THEN v.video_file_path
+            ELSE NULL
+          END as video_file_path,
+          CASE
+            WHEN ua.media_type = 'video' THEN v.youtube_url
+            ELSE NULL
+          END as youtube_url,
+          CASE
+            WHEN ua.media_type = 'video' THEN v.youtube_id
+            ELSE NULL
+          END as youtube_id,
           'pdf' as file_format,
           'application/pdf' as mime_type,
           up.progress_percentage,
@@ -87,7 +122,7 @@ export class DashboardController {
     }
   }
 
-  // Get recommendations for a user
+  // Get recommendations for a user using Smart Recommendation Engine
   static async getRecommendations(req: Request, res: Response) {
     try {
       const userId = (req as any).user?.id;
@@ -97,35 +132,53 @@ export class DashboardController {
 
       const limit = parseInt(req.query.limit as string) || 12;
 
-      // Simple recommendation query - get active books only for now
-      const query = `
-        SELECT
-          'book' as media_type,
-          id as media_id,
-          title,
-          author,
-          cover_image_url as thumbnail_url,
-          language,
-          genre as category,
-          NULL as duration,
-          description,
-          pdf_url as file_url,
-          'pdf' as file_format,
-          'application/pdf' as mime_type
-        FROM books
-        WHERE is_active = true
-        LIMIT $1
-      `;
-
-      const result = await pool.query(query, [Math.ceil(limit / 3)]);
+      // Use Smart Recommendation Engine (TF-IDF + Collaborative Filtering + Hybrid)
+      const recommendations = await HybridService.getHybridRecommendations(
+        userId,
+        {
+          limit,
+          minScore: 0.1,
+          contentWeight: 0.5,
+          collaborativeWeight: 0.5,
+          diversityFactor: 0.3
+        }
+      );
 
       res.json({
-        recommendations: result.rows,
-        count: result.rows.length
+        recommendations,
+        count: recommendations.length
       });
     } catch (error) {
       logger.error('Error getting recommendations:', error);
-      res.status(500).json({ error: 'Failed to fetch recommendations' });
+
+      // Fallback to simple recommendations if ML engine fails
+      try {
+        const perMediaType = Math.ceil(limit / 3);
+        const fallbackQuery = `
+          (SELECT 'book' as media_type, id as media_id, id, title, author, NULL as narrator,
+            cover_image_url, language, genre as category, description, pdf_url as content_url
+            FROM books WHERE is_active = true ORDER BY created_at DESC LIMIT $1)
+          UNION ALL
+          (SELECT 'audio' as media_type, id as media_id, id, title, author, narrator,
+            cover_image_url, language, genre as category, description, audio_file_path as content_url
+            FROM audio_books WHERE is_active = true ORDER BY created_at DESC LIMIT $2)
+          UNION ALL
+          (SELECT 'video' as media_type, id as media_id, id, title, NULL as author, NULL as narrator,
+            thumbnail_url as cover_image_url, language, category, description, COALESCE(video_file_path, youtube_url) as content_url
+            FROM videos WHERE is_active = true ORDER BY created_at DESC LIMIT $3)
+          ORDER BY media_type LIMIT $4
+        `;
+        const result = await pool.query(fallbackQuery, [perMediaType, perMediaType, perMediaType, limit]);
+
+        res.json({
+          recommendations: result.rows,
+          count: result.rows.length,
+          fallback: true
+        });
+      } catch (fallbackError) {
+        logger.error('Fallback recommendations also failed:', fallbackError);
+        res.status(500).json({ error: 'Failed to fetch recommendations' });
+      }
     }
   }
 
@@ -148,6 +201,11 @@ export class DashboardController {
           up.time_spent,
           up.last_accessed,
           CASE
+            WHEN up.media_type = 'book' THEN b.id
+            WHEN up.media_type = 'audio' THEN ab.id
+            WHEN up.media_type = 'video' THEN v.id
+          END as id,
+          CASE
             WHEN up.media_type = 'book' THEN b.title
             WHEN up.media_type = 'audio' THEN ab.title
             WHEN up.media_type = 'video' THEN v.title
@@ -158,10 +216,19 @@ export class DashboardController {
             WHEN up.media_type = 'video' THEN NULL
           END as author,
           CASE
+            WHEN up.media_type = 'audio' THEN ab.narrator
+            ELSE NULL
+          END as narrator,
+          CASE
             WHEN up.media_type = 'book' THEN b.cover_image_url
             WHEN up.media_type = 'audio' THEN ab.cover_image_url
             WHEN up.media_type = 'video' THEN v.thumbnail_url
           END as cover_image_url,
+          CASE
+            WHEN up.media_type = 'book' THEN b.cover_image_url
+            WHEN up.media_type = 'audio' THEN ab.cover_image_url
+            WHEN up.media_type = 'video' THEN v.thumbnail_url
+          END as thumbnail_url,
           CASE
             WHEN up.media_type = 'book' THEN b.language
             WHEN up.media_type = 'audio' THEN ab.language
@@ -180,13 +247,33 @@ export class DashboardController {
           CASE
             WHEN up.media_type = 'book' THEN b.pdf_url
             WHEN up.media_type = 'audio' THEN ab.audio_file_path
-            WHEN up.media_type = 'video' THEN v.video_file_path
+            WHEN up.media_type = 'video' THEN COALESCE(v.video_file_path, v.youtube_url)
           END as file_url,
           CASE
             WHEN up.media_type = 'book' THEN b.pdf_url
             WHEN up.media_type = 'audio' THEN ab.audio_file_path
-            WHEN up.media_type = 'video' THEN v.video_file_path
+            WHEN up.media_type = 'video' THEN COALESCE(v.video_file_path, v.youtube_url)
           END as content_url,
+          CASE
+            WHEN up.media_type = 'book' THEN b.pdf_url
+            ELSE NULL
+          END as pdf_file_path,
+          CASE
+            WHEN up.media_type = 'audio' THEN ab.audio_file_path
+            ELSE NULL
+          END as audio_file_path,
+          CASE
+            WHEN up.media_type = 'video' THEN v.video_file_path
+            ELSE NULL
+          END as video_file_path,
+          CASE
+            WHEN up.media_type = 'video' THEN v.youtube_url
+            ELSE NULL
+          END as youtube_url,
+          CASE
+            WHEN up.media_type = 'video' THEN v.youtube_id
+            ELSE NULL
+          END as youtube_id,
           CASE
             WHEN up.media_type = 'book' THEN 'pdf'
             WHEN up.media_type = 'audio' THEN NULL
@@ -334,14 +421,23 @@ export class DashboardController {
 
       const result = await pool.query(query, [userId]);
 
+      const rawOverview = result.rows[0] || {
+        in_progress_count: 0,
+        completed_count: 0,
+        not_started_count: 0,
+        total_time_spent: 0,
+        recent_views: 0,
+        completion_rate: 0
+      };
+
       res.json({
-        overview: result.rows[0] || {
-          in_progress_count: 0,
-          completed_count: 0,
-          not_started_count: 0,
-          total_time_spent: 0,
-          recent_views: 0,
-          completion_rate: 0
+        overview: {
+          in_progress_count: parseInt(rawOverview.in_progress_count) || 0,
+          completed_count: parseInt(rawOverview.completed_count) || 0,
+          not_started_count: parseInt(rawOverview.not_started_count) || 0,
+          total_time_spent: parseInt(rawOverview.total_time_spent) || 0,
+          recent_views: parseInt(rawOverview.recent_views) || 0,
+          completion_rate: parseFloat(rawOverview.completion_rate) || 0
         }
       });
     } catch (error) {

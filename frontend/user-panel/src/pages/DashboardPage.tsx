@@ -248,11 +248,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onMediaClick, onBack }) =
               <span className="text-sm text-gray-600">{recentlyViewed.length} items</span>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {recentlyViewed.slice(0, 5).map((item) => {
+              {recentlyViewed.slice(0, 5).map((item, index) => {
                 const mediaType = getMediaType(item);
+                const itemId = item.media_id || item.id || `temp-${index}`;
                 return (
                   <div
-                    key={`${mediaType}-${item.id}`}
+                    key={`${mediaType}-${itemId}`}
                     className="bg-white rounded-lg shadow-md hover:shadow-xl transition-shadow duration-300 overflow-hidden cursor-pointer group"
                     onClick={() => handleMediaClick(item)}
                   >
@@ -271,7 +272,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onMediaClick, onBack }) =
                         {mediaType === 'audio' && <Headphones size={12} className="text-green-300" />}
                         {mediaType === 'video' && <Play size={12} className="text-red-300" />}
                       </div>
-                      {item.progress_percentage && (
+                      {(item.progress_percentage !== null && item.progress_percentage !== undefined) && (
                         <div className="absolute bottom-2 right-2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded">
                           {item.progress_percentage}%
                         </div>
@@ -305,11 +306,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onMediaClick, onBack }) =
               <span className="text-sm text-gray-600">{inProgress.length} items</span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {inProgress.slice(0, 4).map((item) => {
+              {inProgress.slice(0, 4).map((item, index) => {
                 const mediaType = getMediaType(item);
+                const itemId = item.media_id || item.id || `temp-${index}`;
                 return (
                   <div
-                    key={`${mediaType}-${item.id}`}
+                    key={`${mediaType}-${itemId}`}
                     className="bg-white rounded-lg shadow-md hover:shadow-xl transition-shadow duration-300 overflow-hidden cursor-pointer group"
                     onClick={() => handleMediaClick(item)}
                   >
@@ -329,7 +331,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onMediaClick, onBack }) =
                         {mediaType === 'video' && <Play size={12} className="text-red-300" />}
                       </div>
                       <div className="absolute bottom-2 left-2 bg-blue-500 text-white text-xs px-2 py-1 rounded">
-                        Progress: {item.progress_percentage}%
+                        Progress: {item.progress_percentage || 0}%
                       </div>
                     </div>
                     <div className="p-3">
@@ -341,9 +343,11 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onMediaClick, onBack }) =
                           {item.author}
                         </p>
                       )}
-                      <p className="text-xs text-gray-500 mt-1">
-                        Last accessed: {new Date(item.last_accessed).toLocaleDateString()}
-                      </p>
+                      {item.last_accessed && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Last accessed: {new Date(item.last_accessed).toLocaleDateString()}
+                        </p>
+                      )}
                     </div>
                   </div>
                 );
@@ -363,11 +367,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onMediaClick, onBack }) =
               <span className="text-sm text-gray-600">{recommendations.length} items</span>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {recommendations.slice(0, 10).map((item) => {
+              {recommendations.slice(0, 10).map((item, index) => {
                 const mediaType = getMediaType(item);
+                const itemId = item.media_id || item.id || `temp-${index}`;
                 return (
                   <div
-                    key={`rec-${mediaType}-${item.id}`}
+                    key={`rec-${mediaType}-${itemId}`}
                     className="bg-white rounded-lg shadow-md hover:shadow-xl transition-shadow duration-300 overflow-hidden cursor-pointer group"
                     onClick={() => handleMediaClick(item)}
                   >
@@ -407,8 +412,70 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onMediaClick, onBack }) =
           </div>
         )}
 
+        {/* Completed Items */}
+        {completed.length > 0 && (
+          <div className="mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2" style={{ fontFamily: 'Times New Roman' }}>
+                <Star size={24} className="text-green-500" />
+                Completed
+              </h2>
+              <span className="text-sm text-gray-600">{completed.length} items</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {completed.slice(0, 4).map((item, index) => {
+                const mediaType = getMediaType(item);
+                const itemId = item.media_id || item.id || `temp-${index}`;
+                return (
+                  <div
+                    key={`completed-${mediaType}-${itemId}`}
+                    className="bg-white rounded-lg shadow-md hover:shadow-xl transition-shadow duration-300 overflow-hidden cursor-pointer group"
+                    onClick={() => handleMediaClick(item)}
+                  >
+                    <div className={`relative ${mediaType === 'video' ? 'aspect-video' : 'aspect-[3/4]'} overflow-hidden bg-gradient-to-br from-green-100 to-green-200`}>
+                      <LazyImage
+                        src={getBestThumbnailUrl(item)}
+                        alt={item.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        fallback=""
+                        aspectRatio={getAspectRatio(item)}
+                        sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 25vw"
+                        priority={false}
+                      />
+                      <div className="absolute top-2 left-2 bg-black bg-opacity-75 text-white p-1 rounded">
+                        {mediaType === 'book' && <Book size={12} className="text-blue-300" />}
+                        {mediaType === 'audio' && <Headphones size={12} className="text-green-300" />}
+                        {mediaType === 'video' && <Play size={12} className="text-red-300" />}
+                      </div>
+                      <div className="absolute bottom-2 left-2 bg-green-500 text-white text-xs px-2 py-1 rounded flex items-center gap-1">
+                        <Star size={12} />
+                        Completed
+                      </div>
+                    </div>
+                    <div className="p-3">
+                      <h3 className="font-semibold text-gray-800 mb-1 line-clamp-2 text-sm group-hover:text-green-600 transition-colors" style={{ fontFamily: 'Times New Roman' }}>
+                        {item.title}
+                      </h3>
+                      {item.author && (
+                        <p className="text-xs text-gray-600" style={{ fontFamily: 'Times New Roman' }}>
+                          {item.author}
+                        </p>
+                      )}
+                      {item.time_spent && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Time spent: {formatTimeSpent(item.time_spent || 0)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Empty State */}
-        {recentlyViewed.length === 0 && inProgress.length === 0 && completed.length === 0 && (
+        {recentlyViewed.length === 0 && inProgress.length === 0 && completed.length === 0 && recommendations.length === 0 && (
           <div className="text-center py-20">
             <BarChart3 size={64} className="text-gray-300 mx-auto mb-4" />
             <h3 className="text-xl font-semibold text-gray-600 mb-2" style={{ fontFamily: 'Times New Roman' }}>
