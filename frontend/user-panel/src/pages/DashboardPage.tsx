@@ -14,7 +14,7 @@ import {
   RefreshCw,
   BarChart3
 } from 'lucide-react';
-import { MediaItem } from '../services/api';
+import { MediaItem, getImageUrl } from '../services/api';
 import { useDashboard } from '../hooks/useDashboard';
 import LazyImage from '../components/LazyImage';
 
@@ -63,8 +63,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onMediaClick, onBack }) =
 
   const getBestThumbnailUrl = (item: MediaItem) => {
     // First, try to get the actual cover/thumbnail URL
-    if (item.cover_image_url && item.cover_image_url.trim()) return item.cover_image_url;
-    if (item.thumbnail_url && item.thumbnail_url.trim()) return item.thumbnail_url;
+    if (item.cover_image_url && item.cover_image_url.trim()) {
+      return getImageUrl(item.cover_image_url); // Convert to full URL
+    }
+    if (item.thumbnail_url && item.thumbnail_url.trim()) {
+      return getImageUrl(item.thumbnail_url); // Convert to full URL
+    }
 
     // For videos, try YouTube thumbnail
     const mediaType = getMediaType(item);
