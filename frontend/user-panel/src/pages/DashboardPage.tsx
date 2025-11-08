@@ -38,6 +38,13 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onMediaClick, onBack }) =
     trackActivity
   } = useDashboard();
 
+  // Fallback placeholder images (SVG data URIs)
+  const FALLBACK_IMAGES = {
+    book: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjQwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZTdmNWZmIi8+PGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMTUwLCAyMDApIj48cmVjdCB4PSItNDAiIHk9Ii02MCIgd2lkdGg9IjgwIiBoZWlnaHQ9IjEyMCIgZmlsbD0iIzkzMzNlYSIgcng9IjQiLz48cmVjdCB4PSItMzUiIHk9Ii01NSIgd2lkdGg9IjcwIiBoZWlnaHQ9IjExMCIgZmlsbD0iI2E4NTVmNyIgcng9IjMiLz48bGluZSB4MT0iLTM1IiB5MT0iLTM1IiB4Mj0iLTE1IiB5Mj0iLTM1IiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iMyIvPjxsaW5lIHgxPSItMzUiIHkxPSItMTUiIHgyPSIxNSIgeTI9Ii0xNSIgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjMiLz48bGluZSB4MT0iLTM1IiB5MT0iNSIgeDI9IjEwIiB5Mj0iNSIgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjMiLz48L2c+PHRleHQgeD0iNTAlIiB5PSI4NSUiIGZvbnQtZmFtaWx5PSJBcmlhbCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxOCIgZmlsbD0iIzkzMzNlYSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC13ZWlnaHQ9ImJvbGQiPkJvb2s8L3RleHQ+PC9zdmc+',
+    audio: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjQwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZWNmY2YxIi8+PGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMTUwLCAyMDApIj48Y2lyY2xlIGN4PSIwIiBjeT0iMCIgcj0iNjAiIGZpbGw9IiMxMGIzODEiIG9wYWNpdHk9IjAuMiIvPjxjaXJjbGUgY3g9IjAiIGN5PSIwIiByPSI0NSIgZmlsbD0iIzEwYjM4MSIgb3BhY2l0eT0iMC4zIi8+PGNpcmNsZSBjeD0iMCIgY3k9IjAiIHI9IjMwIiBmaWxsPSIjMTBiMzgxIi8+PHBhdGggZD0iTSAtMTUsLTE1IEwgMTUsMCBMIC0xNSwxNSBaIiBmaWxsPSIjZmZmIi8+PC9nPjx0ZXh0IHg9IjUwJSIgeT0iODUlIiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTgiIGZpbGw9IiMxMGIzODEiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtd2VpZ2h0PSJib2xkIj5BdWRpbzwvdGV4dD48L3N2Zz4=',
+    video: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjIyNSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZmVlMmUyIi8+PGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMjAwLCAxMTIuNSkiPjxyZWN0IHg9Ii02MCIgeT0iLTQ1IiB3aWR0aD0iMTIwIiBoZWlnaHQ9IjkwIiBmaWxsPSIjZWYyNDQ0IiByeD0iOCIvPjxjaXJjbGUgY3g9IjAiIGN5PSIwIiByPSIyNSIgZmlsbD0iI2ZmZiIgb3BhY2l0eT0iMC45Ii8+PHBhdGggZD0iTSAtOCwtMTIgTCAxNSwwIEwgLTgsMTIgWiIgZmlsbD0iI2VmMjQ0NCIvPjwvZz48dGV4dCB4PSI1MCUiIHk9Ijg1JSIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjE4IiBmaWxsPSIjZWYyNDQ0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXdlaWdodD0iYm9sZCI+VmlkZW88L3RleHQ+PC9zdmc+'
+  };
+
   // Helper functions
   const getMediaType = (item: MediaItem): 'book' | 'audio' | 'video' => {
     // For dashboard items, use the media_type field directly
@@ -55,17 +62,23 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onMediaClick, onBack }) =
   };
 
   const getBestThumbnailUrl = (item: MediaItem) => {
-    if (item.cover_image_url) return item.cover_image_url;
-    if (item.thumbnail_url) return item.thumbnail_url;
+    // First, try to get the actual cover/thumbnail URL
+    if (item.cover_image_url && item.cover_image_url.trim()) return item.cover_image_url;
+    if (item.thumbnail_url && item.thumbnail_url.trim()) return item.thumbnail_url;
 
+    // For videos, try YouTube thumbnail
     const mediaType = getMediaType(item);
-    if (mediaType === 'video') {
-      if (item.youtube_id) {
-        return `https://i.ytimg.com/vi/${item.youtube_id}/hqdefault.jpg`;
-      }
-      return "";
+    if (mediaType === 'video' && item.youtube_id) {
+      return `https://i.ytimg.com/vi/${item.youtube_id}/hqdefault.jpg`;
     }
-    return "";
+
+    // Return fallback image based on media type
+    return FALLBACK_IMAGES[mediaType];
+  };
+
+  const getFallbackImage = (item: MediaItem) => {
+    const mediaType = getMediaType(item);
+    return FALLBACK_IMAGES[mediaType];
   };
 
   const getAspectRatio = (item: MediaItem) => {
@@ -73,8 +86,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onMediaClick, onBack }) =
     return mediaType === 'video' ? '16/9' : '3/4';
   };
 
-  const formatTimeSpent = (seconds: number) => {
-    if (!seconds) return '0m';
+  const formatTimeSpent = (seconds: number | null | undefined) => {
+    if (!seconds || seconds === null || seconds === undefined || seconds === 0) return '0m';
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     if (hours > 0) {
@@ -83,8 +96,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onMediaClick, onBack }) =
     return `${minutes}m`;
   };
 
-  const formatDuration = (seconds: number) => {
-    if (!seconds) return 'Unknown';
+  const formatDuration = (seconds: number | null | undefined) => {
+    if (!seconds || seconds === null || seconds === undefined || seconds === 0) return 'Unknown';
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     if (hours > 0) {
@@ -238,7 +251,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onMediaClick, onBack }) =
         )}
 
         {/* Recently Viewed */}
-        {recentlyViewed.length > 0 && (
+        {recentlyViewed && recentlyViewed.length > 0 && (
           <div className="mb-8">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2" style={{ fontFamily: 'Times New Roman' }}>
@@ -262,7 +275,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onMediaClick, onBack }) =
                         src={getBestThumbnailUrl(item)}
                         alt={item.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        fallback=""
+                        fallback={getFallbackImage(item)}
                         aspectRatio={getAspectRatio(item)}
                         sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 25vw"
                         priority={false}
@@ -296,7 +309,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onMediaClick, onBack }) =
         )}
 
         {/* In Progress */}
-        {inProgress.length > 0 && (
+        {inProgress && inProgress.length > 0 && (
           <div className="mb-8">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2" style={{ fontFamily: 'Times New Roman' }}>
@@ -320,7 +333,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onMediaClick, onBack }) =
                         src={getBestThumbnailUrl(item)}
                         alt={item.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        fallback=""
+                        fallback={getFallbackImage(item)}
                         aspectRatio={getAspectRatio(item)}
                         sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 25vw"
                         priority={false}
@@ -357,7 +370,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onMediaClick, onBack }) =
         )}
 
         {/* Recommendations */}
-        {recommendations.length > 0 && (
+        {recommendations && recommendations.length > 0 && (
           <div className="mb-8">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2" style={{ fontFamily: 'Times New Roman' }}>
@@ -381,7 +394,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onMediaClick, onBack }) =
                         src={getBestThumbnailUrl(item)}
                         alt={item.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        fallback=""
+                        fallback={getFallbackImage(item)}
                         aspectRatio={getAspectRatio(item)}
                         sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 25vw"
                         priority={false}
@@ -413,7 +426,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onMediaClick, onBack }) =
         )}
 
         {/* Completed Items */}
-        {completed.length > 0 && (
+        {completed && completed.length > 0 && (
           <div className="mb-8">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2" style={{ fontFamily: 'Times New Roman' }}>
@@ -437,7 +450,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onMediaClick, onBack }) =
                         src={getBestThumbnailUrl(item)}
                         alt={item.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        fallback=""
+                        fallback={getFallbackImage(item)}
                         aspectRatio={getAspectRatio(item)}
                         sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 25vw"
                         priority={false}
@@ -475,7 +488,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onMediaClick, onBack }) =
         )}
 
         {/* Empty State */}
-        {recentlyViewed.length === 0 && inProgress.length === 0 && completed.length === 0 && recommendations.length === 0 && (
+        {(!recentlyViewed || recentlyViewed.length === 0) &&
+         (!inProgress || inProgress.length === 0) &&
+         (!completed || completed.length === 0) &&
+         (!recommendations || recommendations.length === 0) && (
           <div className="text-center py-20">
             <BarChart3 size={64} className="text-gray-300 mx-auto mb-4" />
             <h3 className="text-xl font-semibold text-gray-600 mb-2" style={{ fontFamily: 'Times New Roman' }}>
