@@ -124,17 +124,19 @@ export class DashboardController {
 
   // Get recommendations for a user using Smart Recommendation Engine
   static async getRecommendations(req: Request, res: Response) {
-    try {
-      const userId = (req as any).user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'User not authenticated' });
-      }
+    const userId = (req as any).user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
 
-      const limit = parseInt(req.query.limit as string) || 12;
+    const limit = parseInt(req.query.limit as string) || 12;
+
+    try {
 
       // Use Smart Recommendation Engine (TF-IDF + Collaborative Filtering + Hybrid)
       const recommendations = await HybridService.getHybridRecommendations(
         userId,
+        undefined, // mediaId - not needed for general recommendations
         {
           limit,
           minScore: 0.1,
