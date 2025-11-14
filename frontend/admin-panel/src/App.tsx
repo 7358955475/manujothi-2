@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import Dashboard from './pages/Dashboard';
@@ -6,6 +6,7 @@ import Users from './pages/Users';
 import Books from './pages/Books';
 import Videos from './pages/Videos';
 import AudioBooks from './pages/AudioBooks';
+import Analytics from './pages/Analytics';
 import Login from './pages/Login';
 import { usersApi } from './services/api';
 
@@ -75,6 +76,7 @@ function App() {
             <Route path="/books" element={<Books />} />
             <Route path="/videos" element={<Videos />} />
             <Route path="/audio-books" element={<AudioBooks />} />
+            <Route path="/analytics" element={<Analytics />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

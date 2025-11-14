@@ -83,6 +83,25 @@ const AudioPage: React.FC<AudioPageProps> = ({ audioBooks, onMediaClick, onBack 
     return `${minutes}m`;
   };
 
+  // Get responsive image srcset for optimal loading
+  const getResponsiveImageSrcset = (audioBook: MediaItem) => {
+    const sources = [];
+    if (audioBook.cover_image_thumbnail) sources.push(`${getImageUrl(audioBook.cover_image_thumbnail)} 150w`);
+    if (audioBook.cover_image_small) sources.push(`${getImageUrl(audioBook.cover_image_small)} 300w`);
+    if (audioBook.cover_image_medium) sources.push(`${getImageUrl(audioBook.cover_image_medium)} 600w`);
+    if (audioBook.cover_image_large) sources.push(`${getImageUrl(audioBook.cover_image_large)} 900w`);
+
+    return sources.length > 0 ? sources.join(', ') : '';
+  };
+
+  // Get best cover image URL, prioritizing responsive images
+  const getBestCoverUrl = (audioBook: MediaItem) => {
+    if (audioBook.cover_image_medium) return getImageUrl(audioBook.cover_image_medium);
+    if (audioBook.cover_image_small) return getImageUrl(audioBook.cover_image_small);
+    if (audioBook.cover_image_url && audioBook.cover_image_url.trim()) return getImageUrl(audioBook.cover_image_url);
+    return '';
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-orange-100">
       {/* Header */}
@@ -200,17 +219,18 @@ const AudioPage: React.FC<AudioPageProps> = ({ audioBooks, onMediaClick, onBack 
                 onClick={() => onMediaClick(book, 'audio')}
               >
                 {/* Cover Image */}
-                <div className="relative aspect-[3/4] overflow-hidden bg-gradient-to-br from-orange-100 to-orange-200">
+                <div className="relative aspect-square overflow-hidden bg-gradient-to-br from-orange-100 to-orange-200">
                   <LazyImage
-                    src={getImageUrl(book.cover_image_url) || ''}
+                    src={getBestCoverUrl(book)}
+                    srcset={getResponsiveImageSrcset(book)}
                     alt={book.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
                     fallback=""
-                    aspectRatio="3/4"
+                    aspectRatio="1/1"
                     sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 20vw"
                     priority={false}
                   />
-                  {!book.cover_image_url && (
+                  {!getBestCoverUrl(book) && (
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                       <Music size={48} className="text-orange-300" />
                     </div>

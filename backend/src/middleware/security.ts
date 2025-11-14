@@ -108,6 +108,9 @@ export const adaptiveRateLimit = rateLimit({
 
 // Secure headers middleware
 export const secureHeaders = (req: Request, res: Response, next: NextFunction) => {
+  // Check if this is a video or audio file request
+  const isMediaFile = /\.(mp4|webm|ogg|mp3|wav|m4a)$/i.test(req.path);
+
   // Additional security headers
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('X-XSS-Protection', '1; mode=block');
@@ -115,15 +118,21 @@ export const secureHeaders = (req: Request, res: Response, next: NextFunction) =
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=(), fullscreen=(), web-share=(), picture-in-picture=()');
 
-  // Anti-download and offline prevention headers
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
+  // Anti-download and offline prevention headers (SKIP for videos/audio)
+  if (!isMediaFile) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  } else {
+    // For videos/audio: Allow caching for proper streaming
+    res.setHeader('Cache-Control', 'public, max-age=31536000');
+  }
+
   res.setHeader('X-Download-Options', 'noopen');
   res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
-  res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
+  res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
-  res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
 
   // Enhanced Content Security Policy to prevent downloads and offline usage
   const csp = [
@@ -135,7 +144,7 @@ export const secureHeaders = (req: Request, res: Response, next: NextFunction) =
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
-    "frame-ancestors 'none'",
+    "frame-ancestors 'self' http://localhost:5173 http://localhost:5174 http://localhost:5175 http://localhost:5176 http://localhost:3000 http://localhost:3002 http://localhost:3003",
     "connect-src 'self'",
     "font-src 'self'",
     "worker-src 'none'",

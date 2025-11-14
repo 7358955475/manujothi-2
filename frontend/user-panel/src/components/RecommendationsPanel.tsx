@@ -58,7 +58,7 @@ const RecommendationCard: React.FC<RecommendationCardProps> = ({
         <img
           src={imageUrl}
           alt={recommendation.title}
-          className="w-full h-full object-cover"
+          className="w-full h-full object-contain"
           onError={(e) => {
             (e.target as HTMLImageElement).src = '/placeholder-image.jpg';
           }}

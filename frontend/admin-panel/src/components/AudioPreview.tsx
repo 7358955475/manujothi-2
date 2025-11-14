@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { X, Edit3, Save, Upload, FileAudio, Play, Pause, Volume2, Eye, EyeOff } from 'lucide-react';
+import { X, Edit3, Save, Upload, FileAudio, Play, Pause, Eye, EyeOff } from 'lucide-react';
 
 interface AudioPreviewData {
   title: string;
@@ -93,15 +93,24 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
       setAudioObjectUrl('');
     }
 
+    // Handle cover image preview
+    if (previewData.coverFile) {
+      // Create object URL for newly uploaded cover file
+      const coverUrl = URL.createObjectURL(previewData.coverFile);
+      setCoverPreview(coverUrl);
+    } else if (previewData.cover_url) {
+      // Use existing cover URL
+      const imageUrl = getImageUrl(previewData.cover_url);
+      setCoverPreview(imageUrl || '');
+    } else {
+      setCoverPreview('');
+    }
+
     // Generate cover preview for local audio files
     if (previewData.audioFile) {
       const newObjectUrl = URL.createObjectURL(previewData.audioFile);
       setAudioObjectUrl(newObjectUrl);
       analyzeAudioFile(previewData.audioFile);
-    } else if (previewData.cover_url) {
-      // Use existing cover URL
-      const imageUrl = getImageUrl(previewData.cover_url);
-      setCoverPreview(imageUrl || '');
     }
   }, [previewData]);
 
@@ -203,7 +212,7 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
       setAudioDuration(Math.floor(audioRef.current.duration));
       setEditedData(prev => ({
         ...prev,
-        duration: Math.floor(audioRef.current.duration)
+        duration: Math.floor(audioRef.current?.duration || 0)
       }));
     }
   };
@@ -287,7 +296,7 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
                     <img
                       src={coverPreview}
                       alt="Audiobook cover"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-gray-400 bg-gradient-to-br from-gray-100 to-gray-200">
@@ -435,7 +444,7 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
                     <img
                       src={coverPreview}
                       alt="Cover preview"
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-contain"
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-gray-400 bg-gradient-to-br from-gray-100 to-gray-200">

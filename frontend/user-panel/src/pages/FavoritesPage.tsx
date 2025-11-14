@@ -107,20 +107,47 @@ const FavoritesPage: React.FC<FavoritesPageProps> = ({ onMediaClick, onBack }) =
     }
   };
 
+  // Get responsive image srcset for optimal loading
+  const getResponsiveImageSrcset = (item: MediaItem) => {
+    const mediaType = getMediaType(item);
+
+    if (mediaType === 'video') {
+      // For videos, use thumbnail_* fields
+      const sources = [];
+      if (item.thumbnail_thumbnail) sources.push(`${getImageUrl(item.thumbnail_thumbnail)} 267w`);
+      if (item.thumbnail_small) sources.push(`${getImageUrl(item.thumbnail_small)} 533w`);
+      if (item.thumbnail_medium) sources.push(`${getImageUrl(item.thumbnail_medium)} 1067w`);
+      if (item.thumbnail_large) sources.push(`${getImageUrl(item.thumbnail_large)} 1600w`);
+
+      return sources.length > 0 ? sources.join(', ') : '';
+    } else {
+      // For books and audio, use cover_image_* fields
+      const sources = [];
+      if (item.cover_image_thumbnail) sources.push(`${getImageUrl(item.cover_image_thumbnail)} 150w`);
+      if (item.cover_image_small) sources.push(`${getImageUrl(item.cover_image_small)} 300w`);
+      if (item.cover_image_medium) sources.push(`${getImageUrl(item.cover_image_medium)} 600w`);
+      if (item.cover_image_large) sources.push(`${getImageUrl(item.cover_image_large)} 900w`);
+
+      return sources.length > 0 ? sources.join(', ') : '';
+    }
+  };
+
   // Get best thumbnail URL with proper URL construction
   const getBestThumbnailUrl = (item: MediaItem) => {
-    // Use cover_image_url if available (for books and audio)
-    if (item.cover_image_url) {
-      return getImageUrl(item.cover_image_url);
-    }
+    const mediaType = getMediaType(item);
 
-    // Use thumbnail_url if available (for videos)
-    if (item.thumbnail_url) {
-      return getImageUrl(item.thumbnail_url);
+    // Try responsive images first (medium size as default)
+    if (mediaType === 'video') {
+      if (item.thumbnail_medium) return getImageUrl(item.thumbnail_medium);
+      if (item.thumbnail_small) return getImageUrl(item.thumbnail_small);
+      if (item.thumbnail_url && item.thumbnail_url.trim()) return getImageUrl(item.thumbnail_url);
+    } else {
+      if (item.cover_image_medium) return getImageUrl(item.cover_image_medium);
+      if (item.cover_image_small) return getImageUrl(item.cover_image_small);
+      if (item.cover_image_url && item.cover_image_url.trim()) return getImageUrl(item.cover_image_url);
     }
 
     // Fallbacks based on media type
-    const mediaType = getMediaType(item);
     if (mediaType === 'video') {
       if (item.youtube_id) {
         // Try multiple YouTube thumbnail qualities as fallbacks
@@ -147,7 +174,17 @@ const FavoritesPage: React.FC<FavoritesPageProps> = ({ onMediaClick, onBack }) =
   // Get aspect ratio for media
   const getAspectRatio = (item: MediaItem) => {
     const mediaType = getMediaType(item);
-    return mediaType === 'video' ? '16/9' : '3/4';
+    if (mediaType === 'video') return '16/9';  // Landscape
+    if (mediaType === 'audio') return '1/1';    // Square
+    return '3/4';  // Portrait (books)
+  };
+
+  // Get aspect ratio CSS class for media
+  const getAspectRatioClass = (item: MediaItem) => {
+    const mediaType = getMediaType(item);
+    if (mediaType === 'video') return 'aspect-video';  // 16:9
+    if (mediaType === 'audio') return 'aspect-square'; // 1:1
+    return 'aspect-[3/4]';  // 3:4 portrait
   };
 
   // Get sizes for responsive images
@@ -303,11 +340,12 @@ const FavoritesPage: React.FC<FavoritesPageProps> = ({ onMediaClick, onBack }) =
                   onClick={() => onMediaClick(item, clickType)}
                 >
                   {/* Cover/Thumbnail */}
-                  <div className={`relative ${mediaType === 'video' ? 'aspect-video' : 'aspect-[3/4]'} overflow-hidden bg-gradient-to-br from-red-100 to-red-200`}>
+                  <div className={`relative ${getAspectRatioClass(item)} overflow-hidden bg-gradient-to-br from-red-100 to-red-200`}>
                     <LazyImage
                       src={getBestThumbnailUrl(item)}
+                      srcset={getResponsiveImageSrcset(item)}
                       alt={item.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
                       fallback=""
                       aspectRatio={getAspectRatio(item)}
                       sizes={getSizes(item)}

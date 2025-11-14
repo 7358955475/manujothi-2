@@ -321,7 +321,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioBook, allAudioBooks, cur
               <img
                 src={getImageUrl(audioBook.cover_image_url) || ''}
                 alt={audioBook.title}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-contain"
               />
             </div>
             
@@ -608,7 +608,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioBook, allAudioBooks, cur
                 <img
                   src={getImageUrl(book.cover_image_url) || ''}
                   alt={book.title}
-                  className="w-12 h-12 rounded-lg object-cover"
+                  className="w-12 h-12 rounded-lg object-contain"
                 />
                 <div className="flex-1 min-w-0">
                   <h4 className={`font-medium text-sm truncate ${

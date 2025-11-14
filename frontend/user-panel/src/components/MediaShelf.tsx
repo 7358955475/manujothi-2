@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Book, Headphones, Play, ChevronDown, ChevronLeft, ChevronRight, Heart } from 'lucide-react';
-import { MediaItem } from '../services/api';
+import { MediaItem, getImageUrl } from '../services/api';
 import LazyImage from './LazyImage';
 import { useFavoritesImproved } from '../hooks/useFavoritesImproved';
 
@@ -117,9 +117,35 @@ const MediaShelf: React.FC<MediaShelfProps> = ({
     return 'book';
   };
 
-  const getBestThumbnailUrl = (item: MediaItem, mediaType: string) => {
-    // For videos: prioritize YouTube thumbnails and local uploads
+  // Get responsive image srcset for optimal loading
+  const getResponsiveImageSrcset = (item: MediaItem, mediaType: string) => {
     if (mediaType === 'video') {
+      // For videos, use thumbnail_* fields
+      const sources = [];
+      if (item.thumbnail_thumbnail) sources.push(`${getImageUrl(item.thumbnail_thumbnail)} 267w`);
+      if (item.thumbnail_small) sources.push(`${getImageUrl(item.thumbnail_small)} 533w`);
+      if (item.thumbnail_medium) sources.push(`${getImageUrl(item.thumbnail_medium)} 1067w`);
+      if (item.thumbnail_large) sources.push(`${getImageUrl(item.thumbnail_large)} 1600w`);
+
+      return sources.length > 0 ? sources.join(', ') : '';
+    } else {
+      // For books and audio, use cover_image_* fields
+      const sources = [];
+      if (item.cover_image_thumbnail) sources.push(`${getImageUrl(item.cover_image_thumbnail)} 150w`);
+      if (item.cover_image_small) sources.push(`${getImageUrl(item.cover_image_small)} 300w`);
+      if (item.cover_image_medium) sources.push(`${getImageUrl(item.cover_image_medium)} 600w`);
+      if (item.cover_image_large) sources.push(`${getImageUrl(item.cover_image_large)} 900w`);
+
+      return sources.length > 0 ? sources.join(', ') : '';
+    }
+  };
+
+  const getBestThumbnailUrl = (item: MediaItem, mediaType: string) => {
+    // Try responsive images first (medium size as default)
+    if (mediaType === 'video') {
+      if (item.thumbnail_medium) return getImageUrl(item.thumbnail_medium);
+      if (item.thumbnail_small) return getImageUrl(item.thumbnail_small);
+
       // First check for YouTube thumbnail URL from database (any YouTube domain)
       if (item.thumbnail_url && (item.thumbnail_url.includes('youtube.com/vi/') || item.thumbnail_url.includes('ytimg.com/vi/'))) {
         // Extract video ID from any YouTube thumbnail URL format
@@ -153,24 +179,23 @@ const MediaShelf: React.FC<MediaShelfProps> = ({
           return `https://i.ytimg.com/vi/${match[1]}/hqdefault.jpg`;
         }
       }
-    }
-
-    // For books and other media: use cover_image_url first, then thumbnail_url
-    // IMPORTANT: Use constructImageUrl to handle local uploads correctly
-    if (item.cover_image_url && item.cover_image_url.trim() !== '') {
-      return constructImageUrl(item.cover_image_url);
-    }
-
-    if (item.thumbnail_url && item.thumbnail_url.trim() !== '') {
-      return constructImageUrl(item.thumbnail_url);
-    }
-
-    // Final fallback - use different images for different media types
-    if (mediaType === 'video') {
-      return "";
     } else {
-      return "";
+      // For books and audio: prioritize responsive images
+      if (item.cover_image_medium) return getImageUrl(item.cover_image_medium);
+      if (item.cover_image_small) return getImageUrl(item.cover_image_small);
+
+      // IMPORTANT: Use constructImageUrl to handle local uploads correctly
+      if (item.cover_image_url && item.cover_image_url.trim() !== '') {
+        return constructImageUrl(item.cover_image_url);
+      }
+
+      if (item.thumbnail_url && item.thumbnail_url.trim() !== '') {
+        return constructImageUrl(item.thumbnail_url);
+      }
     }
+
+    // Final fallback - empty string
+    return "";
   };
 
   return (
@@ -275,15 +300,17 @@ const MediaShelf: React.FC<MediaShelfProps> = ({
                 </button>
 
                 <LazyImage
-                  src={constructImageUrl(getBestThumbnailUrl(item, shelfMediaType))}
+                  src={getBestThumbnailUrl(item, shelfMediaType)}
+                  srcset={getResponsiveImageSrcset(item, shelfMediaType)}
                   alt={item.title}
-                  className="w-full h-32 sm:h-48 object-cover rounded-lg mb-2 sm:mb-3"
-                  fallback={shelfMediaType === 'video'
-                    ? ""
-                    : ""
-                  }
+                  className="rounded-lg mb-2 sm:mb-3"
+                  fallback=""
                   autoSize={false}
-                  aspectRatio={shelfMediaType === 'video' ? '16/9' : '3/4'}
+                  aspectRatio={
+                    shelfMediaType === 'video' ? '16/9' :
+                    shelfMediaType === 'audio' ? '1/1' :
+                    '3/4'
+                  }
                   sizes="(max-width: 640px) 160px, (max-width: 768px) 160px, 240px"
                   priority={false}
                 />

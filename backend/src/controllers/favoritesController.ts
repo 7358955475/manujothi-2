@@ -70,6 +70,18 @@ export class FavoritesController {
                  ELSE NULL
                END as audio_file_path,
                CASE
+                 WHEN f.media_type = 'book' THEN b.pdf_url
+                 ELSE NULL
+               END as pdf_url,
+               CASE
+                 WHEN f.media_type = 'book' THEN b.file_format
+                 ELSE NULL
+               END as file_format,
+               CASE
+                 WHEN f.media_type = 'book' THEN b.mime_type
+                 ELSE NULL
+               END as mime_type,
+               CASE
                  WHEN f.media_type = 'book' THEN b.language
                  WHEN f.media_type = 'audio' THEN ab.language
                  WHEN f.media_type = 'video' THEN v.language
@@ -133,6 +145,9 @@ export class FavoritesController {
           video_source: row.video_source,
           video_file_path: row.video_file_path,
           audio_file_path: row.audio_file_path,
+          pdf_url: row.pdf_url,
+          file_format: row.file_format,
+          mime_type: row.mime_type,
           language: row.language,
           genre: row.genre_or_category,
           category: row.genre_or_category,

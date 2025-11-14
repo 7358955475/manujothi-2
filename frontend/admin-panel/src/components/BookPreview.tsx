@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Edit3, Save, Upload, Book, FileText, Download, Eye, EyeOff, Calendar, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCw } from 'lucide-react';
+import { X, Edit3, Save, Upload, Book, FileText, Download, Eye, EyeOff, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCw } from 'lucide-react';
 
 interface BookPreviewData {
   title: string;
@@ -109,6 +109,18 @@ const BookPreview: React.FC<BookPreviewProps> = ({
       setPdfObjectUrl('');
     }
 
+    // Handle cover image preview
+    if (previewData.coverFile) {
+      // Create object URL for newly uploaded cover file
+      const coverUrl = URL.createObjectURL(previewData.coverFile);
+      setCoverPreview(coverUrl);
+    } else if (previewData.cover_url) {
+      // Use existing cover URL
+      setCoverPreview(getImageUrl(previewData.cover_url) || '');
+    } else {
+      setCoverPreview('');
+    }
+
     // Generate cover preview for local books
     if (previewData.bookFile) {
       const newObjectUrl = URL.createObjectURL(previewData.bookFile);
@@ -120,9 +132,6 @@ const BookPreview: React.FC<BookPreviewProps> = ({
       } else if (extension === 'txt' || previewData.bookFile.type === 'text/plain') {
         loadTextContent(previewData.bookFile);
       }
-    } else if (previewData.cover_url) {
-      // Use existing cover URL
-      setCoverPreview(getImageUrl(previewData.cover_url));
     }
   }, [previewData]);
 
@@ -439,7 +448,7 @@ const BookPreview: React.FC<BookPreviewProps> = ({
                       <img
                         src={coverPreview}
                         alt="Book cover"
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-contain"
                       />
                     ) : (
                       <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 bg-gradient-to-br from-gray-50 to-gray-100">
@@ -613,7 +622,7 @@ const BookPreview: React.FC<BookPreviewProps> = ({
                     <img
                       src={coverPreview}
                       alt="Cover preview"
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-contain"
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-gray-400">
@@ -1047,7 +1056,7 @@ const BookPreview: React.FC<BookPreviewProps> = ({
                       <img
                         src={page}
                         alt={`Page ${index + 1}`}
-                        className="w-16 h-20 object-cover"
+                        className="w-16 h-20 object-contain"
                       />
                       <div className="bg-white text-xs py-1 text-center">
                         {index + 1}

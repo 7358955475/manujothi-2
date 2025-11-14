@@ -18,6 +18,10 @@ import favoritesRoutes from './routes/favorites';
 import dashboardRoutes from './routes/dashboard';
 import debugRoutes from './routes/debug';
 import latestContentRoutes from './routes/latest-content';
+import analyticsRoutes from './routes/analytics';
+import recommendationsRoutes from './routes/recommendations';
+import imageRoutes from './routes/images';
+import settingsRoutes from './routes/settings';
 // import videoStreamRoutes from './routes/video-stream'; // Temporarily disabled - focus on video upload testing
 
 // Import database connection
@@ -59,8 +63,8 @@ app.use(cors({
   origin: (origin, callback) => {
     const allowedOrigins = process.env.NODE_ENV === 'production'
       ? ['https://your-domain.com']
-      : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:3000', 'http://localhost:3002', 'http://localhost:3003'];
-    
+      : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5176', 'http://localhost:3000', 'http://localhost:3002', 'http://localhost:3003', 'http://localhost:3004'];
+
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
@@ -165,12 +169,11 @@ app.use('/public/videos', (req, res, next) => {
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     res.setHeader('Accept-Ranges', 'bytes');
 
-    // Video streaming headers
+    // Video streaming headers - Enable caching for better performance
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Content-Disposition', 'inline');
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
+    res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
+    // Remove Pragma and Expires for videos - they should be cacheable
 
     // Enable range requests for video streaming
     if (req.headers.range) {
@@ -218,27 +221,80 @@ app.use('/public', (req, res, next) => {
   const origin = req.get('Referer') || req.get('Origin');
   const isAllowedOrigin = origin && allowedOrigins.some(allowed => origin.startsWith(allowed));
 
+  // Check if requesting a video or audio file
+  const isMediaFile = /\.(mp4|webm|ogg|mp3|wav|m4a)$/i.test(req.path);
+
   if (isAllowedOrigin) {
     // Remove X-Frame-Options and set ALLOW-FROM to allow embedding from allowed origins
     res.removeHeader('X-Frame-Options');
     res.setHeader('X-Frame-Options', 'ALLOW-FROM ' + origin);
-    // Set additional permissive headers for PDF viewing but prevent downloads
-    res.setHeader('Content-Security-Policy', 'frame-ancestors *; object-src none;');
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
 
-    // Anti-download headers for PDFs and other media
-    res.setHeader('X-Download-Options', 'noopen');
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('Content-Disposition', 'inline');
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
+    if (isMediaFile) {
+      // For videos and audio: Enable range requests, caching set in setHeaders callback below
+      res.setHeader('Content-Disposition', 'inline');
+      // Don't set Cache-Control here - let setHeaders callback handle it
+    } else {
+      // For PDFs and other files: Prevent downloads with no-cache
+      res.setHeader('Content-Security-Policy', 'frame-ancestors *; object-src none;');
+      res.setHeader('X-Download-Options', 'noopen');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Content-Disposition', 'inline');
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    }
   } else {
     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+
+    if (isMediaFile) {
+      // For videos: Don't set Cache-Control here - let setHeaders callback handle it
+      // This ensures proper caching for video streaming
+    }
   }
 
   next();
-}, express.static(path.join(__dirname, '../public')));
+}, express.static(path.join(__dirname, '../public'), {
+  // Enable range request support for video streaming
+  acceptRanges: true,
+  // Set proper MIME types and caching headers
+  setHeaders: (res, filePath) => {
+    const isVideoOrAudio = /\.(mp4|webm|ogg|mp3|wav|m4a)$/i.test(filePath);
+    const isImage = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(filePath);
+    const isResponsiveImage = /-(thumbnail|small|medium|large)\.webp$/i.test(filePath);
+
+    if (isVideoOrAudio) {
+      // Override cache control for videos/audio to enable caching
+      res.setHeader('Cache-Control', 'public, max-age=31536000');
+      res.setHeader('Accept-Ranges', 'bytes');
+    } else if (isResponsiveImage) {
+      // Aggressive caching for responsive image variants (1 year)
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      res.setHeader('Content-Type', 'image/webp');
+      res.setHeader('Vary', 'Accept');
+    } else if (isImage) {
+      // Standard caching for other images (30 days)
+      res.setHeader('Cache-Control', 'public, max-age=2592000');
+      res.setHeader('Vary', 'Accept');
+    }
+
+    if (/\.mp4$/i.test(filePath)) {
+      res.setHeader('Content-Type', 'video/mp4');
+    } else if (/\.webm$/i.test(filePath)) {
+      res.setHeader('Content-Type', 'video/webm');
+    } else if (/\.mp3$/i.test(filePath)) {
+      res.setHeader('Content-Type', 'audio/mpeg');
+    } else if (/\.wav$/i.test(filePath)) {
+      res.setHeader('Content-Type', 'audio/wav');
+    } else if (/\.webp$/i.test(filePath)) {
+      res.setHeader('Content-Type', 'image/webp');
+    } else if (/\.jpg|\.jpeg$/i.test(filePath)) {
+      res.setHeader('Content-Type', 'image/jpeg');
+    } else if (/\.png$/i.test(filePath)) {
+      res.setHeader('Content-Type', 'image/png');
+    }
+  }
+}));
 
 // Serve books directly from /books/ path (alias for /public/books/)
 app.use('/books', (req, res, next) => {
@@ -307,6 +363,10 @@ app.use('/api/security', securityRoutes);
 app.use('/api/favorites', favoritesRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/latest-content', latestContentRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/recommendations', recommendationsRoutes);
+app.use('/api/images', imageRoutes);
+app.use('/api/settings', settingsRoutes);
 app.use('/api/debug', debugRoutes);
 
 // 404 handler

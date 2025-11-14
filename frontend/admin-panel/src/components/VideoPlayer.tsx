@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Download, ExternalLink, FileVideo, Link } from 'lucide-react';
+import { X, ExternalLink, FileVideo, Link } from 'lucide-react';
 
 interface VideoPlayerProps {
   isOpen: boolean;
@@ -186,7 +186,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     <img
                       src={`https://img.youtube.com/vi/${extractYouTubeId(videoUrl)}/hqdefault.jpg`}
                       alt="YouTube thumbnail"
-                      className="w-full h-full object-cover rounded"
+                      className="w-full h-full object-contain rounded"
                       onError={(e) => {
                         const target = e.target as HTMLImageElement;
                         target.style.display = 'none';

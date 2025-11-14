@@ -87,8 +87,23 @@ const VideoPage: React.FC<VideoPageProps> = ({ videos, onMediaClick, onBack }) =
     return `${minutes}m`;
   };
 
+  // Get responsive image srcset for optimal loading
+  const getResponsiveImageSrcset = (video: MediaItem) => {
+    const sources = [];
+    if (video.thumbnail_thumbnail) sources.push(`${getImageUrl(video.thumbnail_thumbnail)} 267w`);
+    if (video.thumbnail_small) sources.push(`${getImageUrl(video.thumbnail_small)} 533w`);
+    if (video.thumbnail_medium) sources.push(`${getImageUrl(video.thumbnail_medium)} 1067w`);
+    if (video.thumbnail_large) sources.push(`${getImageUrl(video.thumbnail_large)} 1600w`);
+
+    return sources.length > 0 ? sources.join(', ') : '';
+  };
+
   // Helper function to get the best thumbnail URL for a video
   const getBestThumbnailUrl = (video: MediaItem): string => {
+    // Try responsive images first (medium size as default)
+    if (video.thumbnail_medium) return getImageUrl(video.thumbnail_medium);
+    if (video.thumbnail_small) return getImageUrl(video.thumbnail_small);
+
     // First check for YouTube thumbnail URL from database (any YouTube domain)
     if (video.thumbnail_url && (video.thumbnail_url.includes('youtube.com/vi/') || video.thumbnail_url.includes('ytimg.com/vi/'))) {
       // Extract video ID from any YouTube thumbnail URL format
@@ -273,8 +288,9 @@ const VideoPage: React.FC<VideoPageProps> = ({ videos, onMediaClick, onBack }) =
                 <div className="relative aspect-video overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200">
                   <LazyImage
                     src={getBestThumbnailUrl(video)}
+                    srcset={getResponsiveImageSrcset(video)}
                     alt={video.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
                     fallback=""
                     aspectRatio="16/9"
                     sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"

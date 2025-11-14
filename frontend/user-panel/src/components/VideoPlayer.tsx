@@ -55,6 +55,52 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose }) => {
     };
   }, []);
 
+  // Handle fullscreen changes
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+    };
+  }, []);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      switch (e.key.toLowerCase()) {
+        case 'f':
+          // F key toggles fullscreen
+          e.preventDefault();
+          toggleFullscreen();
+          break;
+        case 'escape':
+          // ESC exits fullscreen
+          if (isFullscreen) {
+            toggleFullscreen();
+          }
+          break;
+        case ' ':
+          // Spacebar toggles play/pause
+          e.preventDefault();
+          togglePlay();
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [isFullscreen]);
+
   const togglePlay = () => {
     const videoElement = videoRef.current;
     if (!videoElement) return;
@@ -101,18 +147,36 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose }) => {
     videoElement.currentTime = Math.max(0, Math.min(duration, videoElement.currentTime + seconds));
   };
 
-  const toggleFullscreen = () => {
+  const toggleFullscreen = async () => {
     const container = containerRef.current;
     if (!container) return;
 
-    if (!document.fullscreenElement) {
-      container.requestFullscreen().then(() => {
-        setIsFullscreen(true);
-      });
-    } else {
-      document.exitFullscreen().then(() => {
-        setIsFullscreen(false);
-      });
+    try {
+      if (!document.fullscreenElement) {
+        // Enter fullscreen - try different vendor prefixes
+        if (container.requestFullscreen) {
+          await container.requestFullscreen();
+        } else if ((container as any).webkitRequestFullscreen) {
+          await (container as any).webkitRequestFullscreen();
+        } else if ((container as any).mozRequestFullScreen) {
+          await (container as any).mozRequestFullScreen();
+        } else if ((container as any).msRequestFullscreen) {
+          await (container as any).msRequestFullscreen();
+        }
+      } else {
+        // Exit fullscreen - try different vendor prefixes
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else if ((document as any).webkitExitFullscreen) {
+          await (document as any).webkitExitFullscreen();
+        } else if ((document as any).mozCancelFullScreen) {
+          await (document as any).mozCancelFullScreen();
+        } else if ((document as any).msExitFullscreen) {
+          await (document as any).msExitFullscreen();
+        }
+      }
+    } catch (error) {
+      console.error('Fullscreen error:', error);
     }
   };
 
@@ -154,27 +218,39 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50">
-      <div className="relative w-full max-w-6xl mx-4">
+      <div ref={containerRef} className={`relative w-full mx-4 ${isFullscreen ? 'max-w-none h-full' : 'max-w-6xl'}`}>
         {/* Header */}
-        <div className="bg-gray-900 text-white p-4 rounded-t-lg flex justify-between items-center">
+        <div className={`bg-gray-900 text-white p-4 flex justify-between items-center ${isFullscreen ? '' : 'rounded-t-lg'}`}>
           <div>
             <h2 className="text-xl font-bold">{video.title}</h2>
             {video.description && (
               <p className="text-gray-300 text-sm mt-1">{video.description}</p>
             )}
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-800 rounded-full transition-colors"
-          >
-            <X size={24} />
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Fullscreen button for YouTube videos */}
+            {video.video_source === 'youtube' && (
+              <button
+                onClick={toggleFullscreen}
+                className="p-2 hover:bg-gray-800 rounded-full transition-colors"
+                title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+              >
+                <Maximize size={20} />
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-gray-800 rounded-full transition-colors"
+            >
+              <X size={24} />
+            </button>
+          </div>
         </div>
 
         {/* Video Container */}
-        <div ref={containerRef} className="bg-black rounded-b-lg overflow-hidden">
+        <div className={`bg-black overflow-hidden ${isFullscreen ? 'h-[calc(100%-4rem)]' : 'rounded-b-lg'}`}>
           {video.video_source === 'youtube' ? (
-            <div className="relative pb-[56.25%]">
+            <div className={`relative ${isFullscreen ? 'h-full' : 'pb-[56.25%]'}`}>
               <iframe
                 src={getVideoSrc()}
                 title={video.title}
@@ -195,9 +271,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose }) => {
               <video
                 ref={videoRef}
                 src={getVideoSrc()}
-                className="w-full h-auto max-h-[70vh]"
+                className={`w-full ${isFullscreen ? 'h-full object-contain' : 'h-auto max-h-[70vh]'}`}
                 onPlay={() => setIsPlaying(true)}
                 onPause={() => setIsPlaying(false)}
+                onDoubleClick={toggleFullscreen}
                 poster={getImageUrl(video.thumbnail_url)}
                 crossOrigin="anonymous"
                 onError={(e) => {
@@ -295,6 +372,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose }) => {
                   <button
                     onClick={toggleFullscreen}
                     className="text-white hover:text-gray-300 transition-colors"
+                    title="Fullscreen (F key or double-click)"
                   >
                     <Maximize size={20} />
                   </button>

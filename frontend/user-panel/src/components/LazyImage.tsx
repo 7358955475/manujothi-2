@@ -3,6 +3,7 @@ import { useImageOptimization } from '../hooks/useImageOptimization';
 
 interface LazyImageProps {
   src: string;
+  srcset?: string; // For responsive images (multiple sizes)
   alt: string;
   className?: string;
   fallback?: string;
@@ -15,6 +16,7 @@ interface LazyImageProps {
 
 const LazyImage: React.FC<LazyImageProps> = ({
   src,
+  srcset,
   alt,
   className = '',
   fallback = '',
@@ -150,25 +152,44 @@ const LazyImage: React.FC<LazyImageProps> = ({
         maxHeight: '100%',
         objectFit: 'contain' as const
       }
-    : aspectRatio
-    ? {
-        aspectRatio,
-        width: '100%',
-        height: 'auto'
-      }
     : {};
+
+  // Use fixed aspect-ratio container with object-fit: contain to show entire image
+  if (aspectRatio) {
+    return (
+      <div
+        className="w-full overflow-hidden"
+        style={{ aspectRatio }}
+      >
+        <img
+          ref={imgRef}
+          src={imageSrc}
+          srcSet={srcset || undefined}
+          alt={alt}
+          className={`w-full h-full object-contain transition-all duration-500 ${isLoaded ? 'opacity-100 scale-100' : 'opacity-50 scale-95'} ${className}`}
+          onLoad={handleLoad}
+          onError={handleError}
+          loading={priority ? 'eager' : 'lazy'}
+          sizes={srcset ? sizes : undefined}
+          decoding="async"
+          fetchpriority={priority ? 'high' : 'auto'}
+        />
+      </div>
+    );
+  }
 
   return (
     <img
       ref={imgRef}
       src={imageSrc}
+      srcSet={srcset || undefined}
       alt={alt}
       className={`transition-all duration-500 ${isLoaded ? 'opacity-100 scale-100' : 'opacity-50 scale-95'} ${className}`}
       style={imageStyle}
       onLoad={handleLoad}
       onError={handleError}
       loading={priority ? 'eager' : 'lazy'}
-      sizes={sizes}
+      sizes={srcset ? sizes : undefined}
       decoding="async"
       fetchpriority={priority ? 'high' : 'auto'}
     />

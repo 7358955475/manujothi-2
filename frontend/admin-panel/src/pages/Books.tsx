@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Edit, Trash2, Search, Upload, File, AlertCircle, CheckCircle, Eye, X } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, Upload, File, Eye, X } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { booksApi } from '../services/api';
 import BookPreview from '../components/BookPreview';
@@ -28,8 +28,8 @@ const Books: React.FC = () => {
   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm();
 
   // Helper function to construct correct image URLs
-  const getImageUrl = (imageUrl: string | null) => {
-    if (!imageUrl) return null;
+  const getImageUrl = (imageUrl: string | null): string | undefined => {
+    if (!imageUrl) return undefined;
 
     // If it's already a full URL (starts with http), return as is
     if (imageUrl.startsWith('http')) {
@@ -54,7 +54,8 @@ const Books: React.FC = () => {
     try {
       const response = await booksApi.getAll({
         page: currentPage,
-        limit: 10
+        limit: 10,
+        search: searchTerm
       });
       setBooks(response.data.books);
       setTotalPages(response.data.pagination.pages);
@@ -149,13 +150,12 @@ const Books: React.FC = () => {
 
       setUploadProgress(50);
 
-      let response;
       if (editingBook) {
         setUploadStatus('Updating book...');
-        response = await booksApi.update(editingBook.id, formData);
+        await booksApi.update(editingBook.id, formData);
       } else {
         setUploadStatus('Creating book...');
-        response = await booksApi.create(formData);
+        await booksApi.create(formData);
       }
 
       setUploadProgress(85);
@@ -428,7 +428,7 @@ const Books: React.FC = () => {
                         <img 
                           src={getImageUrl(book.cover_image_url) || 'https://images.pexels.com/photos/1130980/pexels-photo-1130980.jpeg?auto=compress&cs=tinysrgb&w=300&h=400&fit=crop'} 
                           alt={book.title}
-                          className="w-12 h-16 object-cover rounded shadow-sm"
+                          className="w-12 h-16 object-contain rounded shadow-sm"
                         />
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -551,9 +551,9 @@ const Books: React.FC = () => {
                   {editingBook && watch('cover_image_url') && !selectedCoverFile && (
                     <div className="flex items-center space-x-4 p-3 bg-gray-50 rounded-lg">
                       <img
-                        src={getImageUrl(watch('cover_image_url'))}
+                        src={getImageUrl((watch('cover_image_url') as string) || '')}
                         alt="Current cover"
-                        className="w-16 h-20 object-cover rounded border border-gray-300"
+                        className="w-16 h-20 object-contain rounded border border-gray-300"
                         onError={(e) => {
                           (e.target as HTMLImageElement).src = 'https://images.pexels.com/photos/1130980/pexels-photo-1130980.jpeg?auto=compress&cs=tinysrgb&w=300&h=400&fit=crop';
                         }}
@@ -573,7 +573,7 @@ const Books: React.FC = () => {
                           <img
                             src={coverPreviewUrl}
                             alt="Cover preview"
-                            className="w-20 h-28 object-cover rounded border-2 border-green-300"
+                            className="w-20 h-28 object-contain rounded border-2 border-green-300"
                           />
                           <button
                             type="button"

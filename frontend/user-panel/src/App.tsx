@@ -1,6 +1,5 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { Search, Calendar, Bell, User as UserIcon, ChevronLeft, ChevronRight, LogOut, Play, Book, Headphones, Heart, BarChart3, Settings } from 'lucide-react';
-import MediaDiagnostics from './components/MediaDiagnostics';
 import { booksApi, audioBooksApi, videosApi, MediaItem } from './services/api';
 import Login from './components/Login';
 import { User } from './types/auth';
@@ -23,6 +22,7 @@ const VideoPage = lazy(() => import('./pages/VideoPage'));
 const BooksPage = lazy(() => import('./pages/BooksPage'));
 const FavoritesPage = lazy(() => import('./pages/FavoritesPage'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 
 const MediaLibraryApp = () => {
   const { logCustomMetric } = usePerformance('MediaLibraryApp');
@@ -47,7 +47,6 @@ const MediaLibraryApp = () => {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [sortBy, setSortBy] = useState({
     books: 'default',
     audio: 'default',
@@ -78,27 +77,37 @@ const MediaLibraryApp = () => {
 
   // Fetch notifications from API
   const fetchNotifications = async () => {
+    // Only fetch notifications if user is logged in
+    if (!user?.id) {
+      setNotifications([]);
+      return;
+    }
+
     try {
-      const userId = user?.id || 'anonymous';
       const apiModule = await import('./services/api');
       const api = apiModule.default;
-      const response = await api.get(`/latest-content?limit=10&user_id=${userId}`);
+      const response = await api.get(`/latest-content?limit=10&user_id=${user.id}`);
       if (response.data) {
         setNotifications(response.data.notifications || []);
       }
     } catch (error) {
       console.error('Failed to fetch notifications:', error);
+      setNotifications([]);
     }
   };
 
   // Mark notifications as read when viewing content
   const markNotificationsAsReadForContent = async (contentId: string, contentType: string) => {
+    // Only mark as read if user is logged in
+    if (!user?.id) {
+      return;
+    }
+
     try {
-      const userId = user?.id || 'anonymous';
       const apiModule = await import('./services/api');
       const api = apiModule.default;
       await api.post('/latest-content/mark-read', {
-        user_id: userId,
+        user_id: user.id,
         content_id: contentId,
         content_type: contentType
       });
@@ -461,22 +470,23 @@ const MediaLibraryApp = () => {
   const handleNotificationClick = async (notification: any) => {
     setShowNotifications(false); // Close notification dropdown
 
-    // Mark notification as read via API
-    try {
-      const userId = user?.id || 'anonymous';
-      const { api } = await import('./services/api');
-      await api.post('/latest-content/mark-read', {
-        user_id: userId,
-        content_id: notification.id,
-        content_type: notification.content_type
+    // Mark notification as read via API (only if user is logged in)
+    if (user?.id) {
+      try {
+        const { api } = await import('./services/api');
+        await api.post('/latest-content/mark-read', {
+          user_id: user.id,
+          content_id: notification.id,
+          content_type: notification.content_type
       });
 
-      // Update local state
-      setNotifications(prev =>
-        prev.map(n => n.id === notification.id ? { ...n, read: true } : n)
-      );
-    } catch (error) {
-      console.error('Failed to mark notification as read:', error);
+        // Update local state
+        setNotifications(prev =>
+          prev.map(n => n.id === notification.id ? { ...n, read: true } : n)
+        );
+      } catch (error) {
+        console.error('Failed to mark notification as read:', error);
+      }
     }
 
     // Find the full media item from the respective data based on content_type
@@ -921,15 +931,6 @@ const MediaLibraryApp = () => {
                 )}
               </button>
 
-              {/* Diagnostics Button */}
-              <button
-                onClick={() => setShowDiagnostics(true)}
-                className="p-2 text-gray-600 hover:text-blue-500 transition-colors duration-200"
-                title="Media Diagnostics"
-              >
-                <Settings size={20} className="sm:w-6 sm:h-6" />
-              </button>
-
               <div className="relative" ref={userMenuRef}>
                 <button
                   onClick={() => setShowUserMenu(!showUserMenu)}
@@ -960,6 +961,17 @@ const MediaLibraryApp = () => {
                     >
                       <UserIcon size={16} />
                       View Profile
+                    </button>
+                    <button
+                      onClick={() => {
+                        setCurrentPage('settings');
+                        setShowUserMenu(false);
+                      }}
+                      className="flex items-center gap-2 w-full px-3 py-2 text-left text-gray-700 hover:bg-gray-100 rounded-lg transition-colors duration-200 mb-2"
+                      style={{ fontFamily: 'Times New Roman' }}
+                    >
+                      <Settings size={16} />
+                      Settings
                     </button>
                     <button
                       onClick={handleLogout}
@@ -1072,6 +1084,14 @@ const MediaLibraryApp = () => {
                   onBack={() => setCurrentPage('home')}
                 />
               </Suspense>
+            ) : currentPage === 'settings' ? (
+              <Suspense fallback={
+                <div className="flex items-center justify-center py-20">
+                  <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-orange-500"></div>
+                </div>
+              }>
+                <SettingsPage />
+              </Suspense>
             ) : loading ? (
               <div className="flex items-center justify-center py-20">
                 <div className="text-center">
@@ -1168,12 +1188,6 @@ const MediaLibraryApp = () => {
           />
         </Suspense>
       )}
-
-      {/* Media Diagnostics Modal */}
-      <MediaDiagnostics
-        isOpen={showDiagnostics}
-        onClose={() => setShowDiagnostics(false)}
-      />
         </>
       )}
     </div>

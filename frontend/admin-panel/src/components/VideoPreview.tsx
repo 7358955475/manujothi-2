@@ -52,8 +52,8 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({
   ];
 
   // Helper function to construct correct image URLs
-  const getImageUrl = (imageUrl: string | null) => {
-    if (!imageUrl) return null;
+  const getImageUrl = (imageUrl: string | null): string => {
+    if (!imageUrl) return '';
 
     // If it's already a full URL (starts with http), return as is
     if (imageUrl.startsWith('http')) {
@@ -94,17 +94,17 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({
     // 3. Auto-generated thumbnail from local video (only if no custom thumbnail)
     // 4. Existing thumbnail URL from database
 
-    if (previewData.thumbnail_url || previewData.thumbnailFile) {
-      // Use uploaded/custom thumbnail first
-      if (previewData.thumbnail_url) {
-        // Check if it's a data URL (from newly uploaded file) or regular URL
-        if (previewData.thumbnail_url.startsWith('data:')) {
-          setThumbnailPreview(previewData.thumbnail_url);
-        } else {
-          setThumbnailPreview(getImageUrl(previewData.thumbnail_url));
-        }
+    if (previewData.thumbnailFile) {
+      // Handle newly uploaded thumbnail file
+      const thumbnailUrl = URL.createObjectURL(previewData.thumbnailFile);
+      setThumbnailPreview(thumbnailUrl);
+    } else if (previewData.thumbnail_url) {
+      // Check if it's a data URL (from newly uploaded file) or regular URL
+      if (previewData.thumbnail_url.startsWith('data:')) {
+        setThumbnailPreview(previewData.thumbnail_url);
+      } else {
+        setThumbnailPreview(getImageUrl(previewData.thumbnail_url) || '');
       }
-      // Note: thumbnailFile is handled by handleThumbnailChange with FileReader
     } else if (previewData.video_source === 'youtube' && previewData.youtube_url) {
       // Use YouTube thumbnail if no custom thumbnail
       setThumbnailPreview(`https://img.youtube.com/vi/${extractYouTubeId(previewData.youtube_url)}/hqdefault.jpg`);
@@ -308,9 +308,9 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({
                     >
                       <div className="text-center w-full h-full relative">
                         <img
-                          src={`https://img.youtube.com/vi/${extractYouTubeId(previewData.youtube_url)}/hqdefault.jpg`}
+                          src={`https://img.youtube.com/vi/${extractYouTubeId(previewData.youtube_url || '')}/hqdefault.jpg`}
                           alt="YouTube thumbnail"
-                          className="absolute inset-0 w-full h-full object-cover rounded"
+                          className="absolute inset-0 w-full h-full object-contain rounded"
                           onError={(e) => {
                             const target = e.target as HTMLImageElement;
                             target.style.display = 'none';
@@ -413,7 +413,7 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({
                     <img
                       src={thumbnailPreview}
                       alt="Thumbnail preview"
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-contain"
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-gray-400">

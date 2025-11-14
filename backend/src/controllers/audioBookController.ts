@@ -3,6 +3,8 @@ import pool from '../config/database';
 import { AuthRequest } from '../middleware/auth';
 import fs from 'fs';
 import path from 'path';
+import { NotificationsController } from './notificationsController';
+import { imageProcessingService } from '../services/ImageProcessingService';
 
 export const getAllAudioBooks = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -10,6 +12,7 @@ export const getAllAudioBooks = async (req: AuthRequest, res: Response): Promise
     const limit = parseInt(req.query.limit as string) || 10;
     const language = req.query.language as string;
     const genre = req.query.genre as string;
+    const search = req.query.search as string;
     const offset = (page - 1) * limit;
 
     let query = 'SELECT * FROM audio_books WHERE is_active = true';
@@ -25,6 +28,12 @@ export const getAllAudioBooks = async (req: AuthRequest, res: Response): Promise
     if (genre) {
       query += ` AND genre ILIKE $${paramIndex}`;
       queryParams.push(`%${genre}%`);
+      paramIndex++;
+    }
+
+    if (search) {
+      query += ` AND (title ILIKE $${paramIndex} OR author ILIKE $${paramIndex} OR narrator ILIKE $${paramIndex} OR description ILIKE $${paramIndex})`;
+      queryParams.push(`%${search}%`);
       paramIndex++;
     }
 
@@ -47,6 +56,12 @@ export const getAllAudioBooks = async (req: AuthRequest, res: Response): Promise
     if (genre) {
       countQuery += ` AND genre ILIKE $${countParamIndex}`;
       countParams.push(`%${genre}%`);
+      countParamIndex++;
+    }
+
+    if (search) {
+      countQuery += ` AND (title ILIKE $${countParamIndex} OR author ILIKE $${countParamIndex} OR narrator ILIKE $${countParamIndex} OR description ILIKE $${countParamIndex})`;
+      countParams.push(`%${search}%`);
     }
 
     const countResult = await pool.query(countQuery, countParams);
@@ -113,6 +128,10 @@ export const createAudioBook = async (req: AuthRequest, res: Response): Promise<
 
     // Handle cover image: PRIORITIZE uploaded file over URL from request body
     let final_cover_image_url = null;
+    let coverThumbnail = null;
+    let coverSmall = null;
+    let coverMedium = null;
+    let coverLarge = null;
 
     // If a cover file was uploaded, ALWAYS use its path (highest priority)
     if (files?.coverFile && files.coverFile.length > 0) {
@@ -124,6 +143,31 @@ export const createAudioBook = async (req: AuthRequest, res: Response): Promise<
       if (!final_cover_image_url.startsWith('/')) {
         final_cover_image_url = '/' + final_cover_image_url;
       }
+
+      try {
+        // Process the uploaded image to generate multiple sizes
+        const processedImages = await imageProcessingService.processUploadedImage(
+          coverPath,
+          {
+            aspectRatio: '1:1', // Audio books use 1:1 square aspect ratio
+            quality: 85,
+            format: 'webp',
+            outputDir: path.join(process.cwd(), 'public', 'images')
+          }
+        );
+
+        // Convert absolute paths to relative URLs for database storage
+        const publicDir = path.join(process.cwd(), 'public');
+        coverThumbnail = imageProcessingService.convertToRelativePath(processedImages.thumbnail, publicDir);
+        coverSmall = imageProcessingService.convertToRelativePath(processedImages.small, publicDir);
+        coverMedium = imageProcessingService.convertToRelativePath(processedImages.medium, publicDir);
+        coverLarge = imageProcessingService.convertToRelativePath(processedImages.large, publicDir);
+
+        console.log('✅ Audio book cover image processed successfully');
+      } catch (error) {
+        console.error('❌ Error processing audio book cover image:', error);
+        // Continue without processed images if processing fails
+      }
     } else if (cover_image_url) {
       // Only use URL from text input if NO file was uploaded
       final_cover_image_url = cover_image_url;
@@ -131,16 +175,23 @@ export const createAudioBook = async (req: AuthRequest, res: Response): Promise<
 
     const result = await pool.query(
       `INSERT INTO audio_books (
-        title, author, narrator, description, cover_image_url,
+        title, author, narrator, description, cover_image_url, cover_image_thumbnail,
+        cover_image_small, cover_image_medium, cover_image_large,
         audio_file_path, language, genre, duration, file_size, created_by
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       RETURNING *`,
-      [title, author, narrator, description, final_cover_image_url, audio_file_path, language, genre, duration, file_size, req.user!.id]
+      [title, author, narrator, description, final_cover_image_url, coverThumbnail, coverSmall,
+       coverMedium, coverLarge, audio_file_path, language, genre, duration, file_size, req.user!.id]
     );
+
+    const createdAudioBook = result.rows[0];
+
+    // Create notification for the new audiobook
+    await NotificationsController.createNotification('audio', createdAudioBook.id, createdAudioBook.title);
 
     res.status(201).json({
       message: 'Audio book created successfully',
-      audioBook: result.rows[0]
+      audioBook: createdAudioBook
     });
   } catch (error) {
     console.error('Create audio book error:', error);
@@ -172,6 +223,10 @@ export const updateAudioBook = async (req: AuthRequest, res: Response): Promise<
     let audio_file_path = null;
     let file_size = null;
     let final_cover_image_url = undefined; // undefined means "don't update this field"
+    let coverThumbnail = undefined;
+    let coverSmall = undefined;
+    let coverMedium = undefined;
+    let coverLarge = undefined;
 
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
 
@@ -218,6 +273,31 @@ export const updateAudioBook = async (req: AuthRequest, res: Response): Promise<
       if (!final_cover_image_url.startsWith('/')) {
         final_cover_image_url = '/' + final_cover_image_url;
       }
+
+      try {
+        // Process the uploaded image to generate multiple sizes
+        const processedImages = await imageProcessingService.processUploadedImage(
+          coverPath,
+          {
+            aspectRatio: '1:1', // Audio books use 1:1 square aspect ratio
+            quality: 85,
+            format: 'webp',
+            outputDir: path.join(process.cwd(), 'public', 'images')
+          }
+        );
+
+        // Convert absolute paths to relative URLs for database storage
+        const publicDir = path.join(process.cwd(), 'public');
+        coverThumbnail = imageProcessingService.convertToRelativePath(processedImages.thumbnail, publicDir);
+        coverSmall = imageProcessingService.convertToRelativePath(processedImages.small, publicDir);
+        coverMedium = imageProcessingService.convertToRelativePath(processedImages.medium, publicDir);
+        coverLarge = imageProcessingService.convertToRelativePath(processedImages.large, publicDir);
+
+        console.log('✅ Audio book cover image updated and processed successfully');
+      } catch (error) {
+        console.error('❌ Error processing updated audio book cover image:', error);
+        // Continue without processed images if processing fails
+      }
     } else if (cover_image_url !== undefined && cover_image_url !== null && cover_image_url !== '') {
       // URL FROM TEXT INPUT - Only use if no file was uploaded
       final_cover_image_url = cover_image_url;
@@ -237,15 +317,20 @@ export const updateAudioBook = async (req: AuthRequest, res: Response): Promise<
         narrator = COALESCE($3, narrator),
         description = COALESCE($4, description),
         cover_image_url = COALESCE($5, cover_image_url),
-        audio_file_path = COALESCE($6, audio_file_path),
-        language = COALESCE($7, language),
-        genre = COALESCE($8, genre),
-        duration = COALESCE($9, duration),
-        file_size = COALESCE($10, file_size),
-        is_active = COALESCE($11, is_active)
-      WHERE id = $12 AND is_active = true
+        cover_image_thumbnail = COALESCE($6, cover_image_thumbnail),
+        cover_image_small = COALESCE($7, cover_image_small),
+        cover_image_medium = COALESCE($8, cover_image_medium),
+        cover_image_large = COALESCE($9, cover_image_large),
+        audio_file_path = COALESCE($10, audio_file_path),
+        language = COALESCE($11, language),
+        genre = COALESCE($12, genre),
+        duration = COALESCE($13, duration),
+        file_size = COALESCE($14, file_size),
+        is_active = COALESCE($15, is_active)
+      WHERE id = $16 AND is_active = true
       RETURNING *`,
-      [title, author, narrator, description, final_cover_image_url, audio_file_path, language, genre, durationNum, fileSizeNum, isActiveBool, id]
+      [title, author, narrator, description, final_cover_image_url, coverThumbnail, coverSmall,
+       coverMedium, coverLarge, audio_file_path, language, genre, durationNum, fileSizeNum, isActiveBool, id]
     );
 
     if (result.rows.length === 0) {

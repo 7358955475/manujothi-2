@@ -81,4 +81,13 @@ export const audioBooksApi = {
   getEndpoint: (path: string = '') => `${API_BASE_URL}/audio-books${path ? '/' + path.replace(/^\//, '') : ''}`,
 };
 
+export const analyticsApi = {
+  getContentPerformance: (params?: any) => api.get('/analytics/content-performance', { params }),
+  getUserEngagement: (params?: any) => api.get('/analytics/user-engagement', { params }),
+  getActivityTrends: (params?: any) => api.get('/analytics/activity-trends', { params }),
+  getPeakUsage: (params?: any) => api.get('/analytics/peak-usage', { params }),
+  getComparativeStats: (params?: any) => api.get('/analytics/comparative-stats', { params }),
+  getRealTime: () => api.get('/analytics/real-time'),
+};
+
 export default api;

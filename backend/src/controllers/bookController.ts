@@ -2,6 +2,9 @@ import { Response } from 'express';
 import pool from '../config/database';
 import { AuthRequest } from '../middleware/auth';
 import fs from 'fs';
+import path from 'path';
+import { NotificationsController } from './notificationsController';
+import { imageProcessingService } from '../services/ImageProcessingService';
 
 export const getAllBooks = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -9,6 +12,7 @@ export const getAllBooks = async (req: AuthRequest, res: Response): Promise<void
     const limit = parseInt(req.query.limit as string) || 10;
     const language = req.query.language as string;
     const genre = req.query.genre as string;
+    const search = req.query.search as string;
     const offset = (page - 1) * limit;
 
     let query = 'SELECT * FROM books WHERE is_active = true';
@@ -24,6 +28,12 @@ export const getAllBooks = async (req: AuthRequest, res: Response): Promise<void
     if (genre) {
       query += ` AND genre ILIKE $${paramIndex}`;
       queryParams.push(`%${genre}%`);
+      paramIndex++;
+    }
+
+    if (search) {
+      query += ` AND (title ILIKE $${paramIndex} OR author ILIKE $${paramIndex} OR description ILIKE $${paramIndex})`;
+      queryParams.push(`%${search}%`);
       paramIndex++;
     }
 
@@ -46,6 +56,12 @@ export const getAllBooks = async (req: AuthRequest, res: Response): Promise<void
     if (genre) {
       countQuery += ` AND genre ILIKE $${countParamIndex}`;
       countParams.push(`%${genre}%`);
+      countParamIndex++;
+    }
+
+    if (search) {
+      countQuery += ` AND (title ILIKE $${countParamIndex} OR author ILIKE $${countParamIndex} OR description ILIKE $${countParamIndex})`;
+      countParams.push(`%${search}%`);
     }
 
     const countResult = await pool.query(countQuery, countParams);
@@ -141,8 +157,45 @@ export const createBook = async (req: AuthRequest, res: Response): Promise<void>
     }
 
     // Set cover image URL from uploaded file if available (HIGHEST PRIORITY)
+    let coverThumbnail = null;
+    let coverSmall = null;
+    let coverMedium = null;
+    let coverLarge = null;
+
     if (files && files.coverFile && files.coverFile[0]) {
+      const uploadedCoverPath = files.coverFile[0].path;
       finalCoverUrl = `/public/images/${files.coverFile[0].filename}`;
+
+      try {
+        // Process the uploaded image to generate multiple sizes
+        const processedImages = await imageProcessingService.processUploadedImage(
+          uploadedCoverPath,
+          {
+            aspectRatio: '3:4', // Books use 3:4 aspect ratio
+            quality: 85,
+            format: 'webp',
+            outputDir: path.join(process.cwd(), 'public', 'images')
+          }
+        );
+
+        // Convert absolute paths to relative URLs for database storage
+        const publicDir = path.join(process.cwd(), 'public');
+        coverThumbnail = imageProcessingService.convertToRelativePath(processedImages.thumbnail, publicDir);
+        coverSmall = imageProcessingService.convertToRelativePath(processedImages.small, publicDir);
+        coverMedium = imageProcessingService.convertToRelativePath(processedImages.medium, publicDir);
+        coverLarge = imageProcessingService.convertToRelativePath(processedImages.large, publicDir);
+
+        console.log('✅ Cover image processed successfully:', {
+          original: finalCoverUrl,
+          thumbnail: coverThumbnail,
+          small: coverSmall,
+          medium: coverMedium,
+          large: coverLarge
+        });
+      } catch (error) {
+        console.error('❌ Error processing cover image:', error);
+        // Continue without processed images if processing fails
+      }
     } else if (cover_image_url) {
       // Only use URL from text input if NO file was uploaded
       finalCoverUrl = cover_image_url;
@@ -169,16 +222,23 @@ export const createBook = async (req: AuthRequest, res: Response): Promise<void>
 
     const result = await pool.query(
       `INSERT INTO books (
-        title, author, description, cover_image_url, pdf_url, file_url, file_format, file_size, mime_type,
+        title, author, description, cover_image_url, cover_image_thumbnail, cover_image_small,
+        cover_image_medium, cover_image_large, pdf_url, file_url, file_format, file_size, mime_type,
         language, genre, published_year, created_by
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
       RETURNING *`,
-      [title, author, description, finalCoverUrl, finalPdfUrl, finalFileUrl, finalFileFormat, finalFileSize, finalMimeType, language, genre, published_year, req.user!.id]
+      [title, author, description, finalCoverUrl, coverThumbnail, coverSmall, coverMedium, coverLarge,
+       finalPdfUrl, finalFileUrl, finalFileFormat, finalFileSize, finalMimeType, language, genre, published_year, req.user!.id]
     );
+
+    const createdBook = result.rows[0];
+
+    // Create notification for the new book
+    await NotificationsController.createNotification('book', createdBook.id, createdBook.title);
 
     res.status(201).json({
       message: 'Book created successfully',
-      book: result.rows[0]
+      book: createdBook
     });
   } catch (error) {
     console.error('Create book error:', error);
@@ -205,6 +265,10 @@ export const updateBook = async (req: AuthRequest, res: Response): Promise<void>
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
     let finalPdfUrl = undefined; // undefined means "don't update"
     let finalCoverUrl = undefined; // undefined means "don't update"
+    let coverThumbnail = undefined;
+    let coverSmall = undefined;
+    let coverMedium = undefined;
+    let coverLarge = undefined;
 
     // Set PDF URL from uploaded file if available (HIGHEST PRIORITY)
     if (files && files.pdfFile && files.pdfFile[0]) {
@@ -216,7 +280,33 @@ export const updateBook = async (req: AuthRequest, res: Response): Promise<void>
 
     // Set cover image URL from uploaded file if available (HIGHEST PRIORITY)
     if (files && files.coverFile && files.coverFile[0]) {
+      const uploadedCoverPath = files.coverFile[0].path;
       finalCoverUrl = `/public/images/${files.coverFile[0].filename}`;
+
+      try {
+        // Process the uploaded image to generate multiple sizes
+        const processedImages = await imageProcessingService.processUploadedImage(
+          uploadedCoverPath,
+          {
+            aspectRatio: '3:4', // Books use 3:4 aspect ratio
+            quality: 85,
+            format: 'webp',
+            outputDir: path.join(process.cwd(), 'public', 'images')
+          }
+        );
+
+        // Convert absolute paths to relative URLs for database storage
+        const publicDir = path.join(process.cwd(), 'public');
+        coverThumbnail = imageProcessingService.convertToRelativePath(processedImages.thumbnail, publicDir);
+        coverSmall = imageProcessingService.convertToRelativePath(processedImages.small, publicDir);
+        coverMedium = imageProcessingService.convertToRelativePath(processedImages.medium, publicDir);
+        coverLarge = imageProcessingService.convertToRelativePath(processedImages.large, publicDir);
+
+        console.log('✅ Cover image updated and processed successfully');
+      } catch (error) {
+        console.error('❌ Error processing updated cover image:', error);
+        // Continue without processed images if processing fails
+      }
     } else if (cover_image_url !== undefined && cover_image_url !== null && cover_image_url !== '') {
       // Only use URL from text input if NO file was uploaded
       finalCoverUrl = cover_image_url;
@@ -228,14 +318,19 @@ export const updateBook = async (req: AuthRequest, res: Response): Promise<void>
         author = COALESCE($2, author),
         description = COALESCE($3, description),
         cover_image_url = COALESCE($4, cover_image_url),
-        pdf_url = COALESCE($5, pdf_url),
-        language = COALESCE($6, language),
-        genre = COALESCE($7, genre),
-        published_year = COALESCE($8, published_year),
-        is_active = COALESCE($9, is_active)
-      WHERE id = $10
+        cover_image_thumbnail = COALESCE($5, cover_image_thumbnail),
+        cover_image_small = COALESCE($6, cover_image_small),
+        cover_image_medium = COALESCE($7, cover_image_medium),
+        cover_image_large = COALESCE($8, cover_image_large),
+        pdf_url = COALESCE($9, pdf_url),
+        language = COALESCE($10, language),
+        genre = COALESCE($11, genre),
+        published_year = COALESCE($12, published_year),
+        is_active = COALESCE($13, is_active)
+      WHERE id = $14
       RETURNING *`,
-      [title, author, description, finalCoverUrl, finalPdfUrl, language, genre, published_year, is_active, id]
+      [title, author, description, finalCoverUrl, coverThumbnail, coverSmall, coverMedium, coverLarge,
+       finalPdfUrl, language, genre, published_year, is_active, id]
     );
 
     if (result.rows.length === 0) {

@@ -67,6 +67,10 @@ export interface MediaItem {
   narrator?: string;
   description?: string;
   cover_image_url?: string;
+  cover_image_thumbnail?: string;
+  cover_image_small?: string;
+  cover_image_medium?: string;
+  cover_image_large?: string;
   pdf_url?: string;
   file_url?: string;
   file_format?: string;
@@ -76,6 +80,10 @@ export interface MediaItem {
   youtube_url?: string;
   youtube_id?: string;
   thumbnail_url?: string;
+  thumbnail_thumbnail?: string;
+  thumbnail_small?: string;
+  thumbnail_medium?: string;
+  thumbnail_large?: string;
   video_source?: 'youtube' | 'local';
   video_file_path?: string;
   language: 'tamil' | 'english' | 'telugu' | 'hindi';
@@ -202,6 +210,75 @@ export const authApi = {
     api.post('/auth/login', { email, password }),
   register: (data: RegisterRequest): Promise<{ data: AuthResponse }> =>
     api.post('/auth/register', data),
+};
+
+export interface UserSettings {
+  user: {
+    id: string;
+    email: string;
+    first_name: string;
+    last_name: string;
+    role: 'user' | 'admin';
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+  };
+  preferences: {
+    preferred_genres: string[];
+    preferred_languages: string[];
+    preferred_media_types: string[];
+    interaction_data: Record<string, any>;
+  };
+  notifications: {
+    total: number;
+    unread: number;
+    enabled: boolean;
+  };
+  activity: {
+    book?: { count: number; lastAccessed: string };
+    audio?: { count: number; lastAccessed: string };
+    video?: { count: number; lastAccessed: string };
+  };
+  stats: {
+    favoritesCount: number;
+  };
+}
+
+export const settingsApi = {
+  // Get all user settings - 100% dynamic from backend
+  getSettings: (): Promise<{ data: { success: boolean; data: UserSettings } }> =>
+    api.get('/settings'),
+
+  // Update user profile
+  updateProfile: (data: {
+    first_name: string;
+    last_name: string;
+    email: string;
+  }): Promise<{ data: { success: boolean; data: any; message: string } }> =>
+    api.put('/settings/profile', data),
+
+  // Update user preferences
+  updatePreferences: (data: {
+    preferred_genres: string[];
+    preferred_languages: string[];
+    preferred_media_types: string[];
+  }): Promise<{ data: { success: boolean; data: any; message: string } }> =>
+    api.put('/settings/preferences', data),
+
+  // Change password
+  changePassword: (data: {
+    current_password: string;
+    new_password: string;
+  }): Promise<{ data: { success: boolean; message: string } }> =>
+    api.post('/settings/change-password', data),
+
+  // Delete account
+  deleteAccount: (password: string): Promise<{ data: { success: boolean; message: string } }> =>
+    api.delete('/settings/account', { data: { password } }),
+
+  // Get activity statistics
+  getActivityStats: (): Promise<{ data: { success: boolean; data: any } }> =>
+    api.get('/settings/activity'),
 };
 
 // Helper functions for media URLs

@@ -61,17 +61,46 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onMediaClick, onBack }) =
     return mediaType === 'book' ? 'pdf' : mediaType as 'audio' | 'video';
   };
 
-  const getBestThumbnailUrl = (item: MediaItem) => {
-    // First, try to get the actual cover/thumbnail URL
-    if (item.cover_image_url && item.cover_image_url.trim()) {
-      return getImageUrl(item.cover_image_url); // Convert to full URL
+  // Get responsive image srcset for optimal loading
+  const getResponsiveImageSrcset = (item: MediaItem) => {
+    const mediaType = getMediaType(item);
+
+    if (mediaType === 'video') {
+      // For videos, use thumbnail_* fields
+      const sources = [];
+      if (item.thumbnail_thumbnail) sources.push(`${getImageUrl(item.thumbnail_thumbnail)} 267w`);
+      if (item.thumbnail_small) sources.push(`${getImageUrl(item.thumbnail_small)} 533w`);
+      if (item.thumbnail_medium) sources.push(`${getImageUrl(item.thumbnail_medium)} 1067w`);
+      if (item.thumbnail_large) sources.push(`${getImageUrl(item.thumbnail_large)} 1600w`);
+
+      return sources.length > 0 ? sources.join(', ') : '';
+    } else {
+      // For books and audio, use cover_image_* fields
+      const sources = [];
+      if (item.cover_image_thumbnail) sources.push(`${getImageUrl(item.cover_image_thumbnail)} 150w`);
+      if (item.cover_image_small) sources.push(`${getImageUrl(item.cover_image_small)} 300w`);
+      if (item.cover_image_medium) sources.push(`${getImageUrl(item.cover_image_medium)} 600w`);
+      if (item.cover_image_large) sources.push(`${getImageUrl(item.cover_image_large)} 900w`);
+
+      return sources.length > 0 ? sources.join(', ') : '';
     }
-    if (item.thumbnail_url && item.thumbnail_url.trim()) {
-      return getImageUrl(item.thumbnail_url); // Convert to full URL
+  };
+
+  const getBestThumbnailUrl = (item: MediaItem) => {
+    const mediaType = getMediaType(item);
+
+    // Try responsive images first (medium size as default)
+    if (mediaType === 'video') {
+      if (item.thumbnail_medium) return getImageUrl(item.thumbnail_medium);
+      if (item.thumbnail_small) return getImageUrl(item.thumbnail_small);
+      if (item.thumbnail_url && item.thumbnail_url.trim()) return getImageUrl(item.thumbnail_url);
+    } else {
+      if (item.cover_image_medium) return getImageUrl(item.cover_image_medium);
+      if (item.cover_image_small) return getImageUrl(item.cover_image_small);
+      if (item.cover_image_url && item.cover_image_url.trim()) return getImageUrl(item.cover_image_url);
     }
 
     // For videos, try YouTube thumbnail
-    const mediaType = getMediaType(item);
     if (mediaType === 'video' && item.youtube_id) {
       return `https://i.ytimg.com/vi/${item.youtube_id}/hqdefault.jpg`;
     }
@@ -87,7 +116,16 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onMediaClick, onBack }) =
 
   const getAspectRatio = (item: MediaItem) => {
     const mediaType = getMediaType(item);
-    return mediaType === 'video' ? '16/9' : '3/4';
+    if (mediaType === 'video') return '16/9';  // Landscape
+    if (mediaType === 'audio') return '1/1';    // Square
+    return '3/4';  // Portrait (books)
+  };
+
+  const getAspectRatioClass = (item: MediaItem) => {
+    const mediaType = getMediaType(item);
+    if (mediaType === 'video') return 'aspect-video';  // 16:9
+    if (mediaType === 'audio') return 'aspect-square'; // 1:1
+    return 'aspect-[3/4]';  // 3:4 portrait
   };
 
   const formatTimeSpent = (seconds: number | null | undefined) => {
@@ -274,11 +312,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onMediaClick, onBack }) =
                     className="bg-white rounded-lg shadow-md hover:shadow-xl transition-shadow duration-300 overflow-hidden cursor-pointer group"
                     onClick={() => handleMediaClick(item)}
                   >
-                    <div className={`relative ${mediaType === 'video' ? 'aspect-video' : 'aspect-[3/4]'} overflow-hidden bg-gradient-to-br from-orange-100 to-orange-200`}>
+                    <div className={`relative ${getAspectRatioClass(item)} overflow-hidden bg-gradient-to-br from-orange-100 to-orange-200`}>
                       <LazyImage
                         src={getBestThumbnailUrl(item)}
+                        srcset={getResponsiveImageSrcset(item)}
                         alt={item.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
                         fallback={getFallbackImage(item)}
                         aspectRatio={getAspectRatio(item)}
                         sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 25vw"
@@ -332,11 +371,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onMediaClick, onBack }) =
                     className="bg-white rounded-lg shadow-md hover:shadow-xl transition-shadow duration-300 overflow-hidden cursor-pointer group"
                     onClick={() => handleMediaClick(item)}
                   >
-                    <div className={`relative ${mediaType === 'video' ? 'aspect-video' : 'aspect-[3/4]'} overflow-hidden bg-gradient-to-br from-blue-100 to-blue-200`}>
+                    <div className={`relative ${getAspectRatioClass(item)} overflow-hidden bg-gradient-to-br from-blue-100 to-blue-200`}>
                       <LazyImage
                         src={getBestThumbnailUrl(item)}
+                        srcset={getResponsiveImageSrcset(item)}
                         alt={item.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
                         fallback={getFallbackImage(item)}
                         aspectRatio={getAspectRatio(item)}
                         sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 25vw"
@@ -393,11 +433,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onMediaClick, onBack }) =
                     className="bg-white rounded-lg shadow-md hover:shadow-xl transition-shadow duration-300 overflow-hidden cursor-pointer group"
                     onClick={() => handleMediaClick(item)}
                   >
-                    <div className={`relative ${mediaType === 'video' ? 'aspect-video' : 'aspect-[3/4]'} overflow-hidden bg-gradient-to-br from-purple-100 to-purple-200`}>
+                    <div className={`relative ${getAspectRatioClass(item)} overflow-hidden bg-gradient-to-br from-purple-100 to-purple-200`}>
                       <LazyImage
                         src={getBestThumbnailUrl(item)}
+                        srcset={getResponsiveImageSrcset(item)}
                         alt={item.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
                         fallback={getFallbackImage(item)}
                         aspectRatio={getAspectRatio(item)}
                         sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 25vw"
@@ -449,11 +490,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onMediaClick, onBack }) =
                     className="bg-white rounded-lg shadow-md hover:shadow-xl transition-shadow duration-300 overflow-hidden cursor-pointer group"
                     onClick={() => handleMediaClick(item)}
                   >
-                    <div className={`relative ${mediaType === 'video' ? 'aspect-video' : 'aspect-[3/4]'} overflow-hidden bg-gradient-to-br from-green-100 to-green-200`}>
+                    <div className={`relative ${getAspectRatioClass(item)} overflow-hidden bg-gradient-to-br from-green-100 to-green-200`}>
                       <LazyImage
                         src={getBestThumbnailUrl(item)}
+                        srcset={getResponsiveImageSrcset(item)}
                         alt={item.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
                         fallback={getFallbackImage(item)}
                         aspectRatio={getAspectRatio(item)}
                         sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 25vw"

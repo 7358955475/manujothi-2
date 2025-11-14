@@ -34,8 +34,8 @@ const Videos: React.FC = () => {
   const { register, handleSubmit, reset, getValues, setValue, formState: { errors } } = useForm();
 
   // Helper function to construct correct image URLs
-  const getImageUrl = (imageUrl: string | null) => {
-    if (!imageUrl) return null;
+  const getImageUrl = (imageUrl: string | null): string | undefined => {
+    if (!imageUrl) return undefined;
 
     // If it's a YouTube thumbnail URL, extract video ID and reconstruct with reliable domain
     if (imageUrl.includes('youtube.com/vi/') || imageUrl.includes('ytimg.com/vi/')) {
@@ -60,16 +60,6 @@ const Videos: React.FC = () => {
     return `http://localhost:3001${imageUrl.startsWith('/') ? imageUrl : '/' + imageUrl}`;
   };
 
-  // Helper function to get video URL for playback
-  const getVideoUrl = (video: any) => {
-    if (video.video_source === 'youtube' && video.youtube_url) {
-      return video.youtube_url;
-    } else if (video.video_source === 'local' && video.video_file_path) {
-      return `http://localhost:3001${video.video_file_path}`;
-    }
-    return null;
-  };
-
   // Handle playing a video
   const handlePlayVideo = (video: any) => {
     setPlayingVideo(video);
@@ -85,7 +75,8 @@ const Videos: React.FC = () => {
     try {
       const response = await videosApi.getAll({
         page: currentPage,
-        limit: 10
+        limit: 10,
+        search: searchTerm
       });
       setVideos(response.data.videos);
       setTotalPages(response.data.pagination.pages);
@@ -211,11 +202,13 @@ const Videos: React.FC = () => {
         reject(new Error('Network error during upload'));
       });
 
-      // Start upload
-      xhr.open('POST', editingVideo ?
+      // Start upload - Use PUT for updates, POST for creates
+      const method = editingVideo ? 'PUT' : 'POST';
+      const endpoint = editingVideo ?
         videosApi.getEndpoint(`/${editingVideo.id}`) :
-        videosApi.getEndpoint('')
-      );
+        videosApi.getEndpoint('');
+
+      xhr.open(method, endpoint);
 
       // Add authorization header if needed
       const token = localStorage.getItem('authToken');
@@ -255,7 +248,7 @@ const Videos: React.FC = () => {
         // Skip special fields that are handled separately
         if (key === 'is_active' || key === 'duration' || key === 'video_source') {
           if (key === 'is_active') {
-            formData.append(key, data[key] === 'true' || data[key] === true);
+            formData.append(key, String(data[key] === 'true' || data[key] === true));
           }
           return;
         }
@@ -585,9 +578,9 @@ const Videos: React.FC = () => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         {video.thumbnail_url && (
                           <img
-                            src={getImageUrl(video.thumbnail_url)}
+                            src={getImageUrl((video.thumbnail_url as string) || '')}
                             alt={video.title}
-                            className="w-16 h-12 object-cover rounded"
+                            className="w-16 h-12 object-contain rounded"
                             onError={(e) => {
                               // Fallback to a default image or hide on error
                               const target = e.target as HTMLImageElement;
@@ -829,7 +822,7 @@ const Videos: React.FC = () => {
                       <img
                         src={thumbnailPreview}
                         alt="Thumbnail preview"
-                        className="w-40 h-28 object-cover rounded-lg shadow-md border-2 border-gray-200"
+                        className="w-40 h-28 object-contain rounded-lg shadow-md border-2 border-gray-200"
                       />
                       <button
                         type="button"

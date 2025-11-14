@@ -136,11 +136,13 @@ const AudioBooks: React.FC = () => {
         reject(new Error('Network error during upload'));
       });
 
-      // Start upload
-      xhr.open('POST', editingAudioBook ?
+      // Start upload - Use PUT for updates, POST for creates
+      const method = editingAudioBook ? 'PUT' : 'POST';
+      const endpoint = editingAudioBook ?
         audioBooksApi.getEndpoint(`/${editingAudioBook.id}`) :
-        audioBooksApi.getEndpoint('')
-      );
+        audioBooksApi.getEndpoint('');
+
+      xhr.open(method, endpoint);
 
       // Add authorization header if needed
       const token = localStorage.getItem('authToken');
@@ -182,7 +184,8 @@ const AudioBooks: React.FC = () => {
     try {
       const response = await audioBooksApi.getAll({
         page: currentPage,
-        limit: 10
+        limit: 10,
+        search: searchTerm
       });
       setAudioBooks(response.data.audioBooks);
       setTotalPages(response.data.pagination.pages);
@@ -429,7 +432,7 @@ const AudioBooks: React.FC = () => {
                         <img 
                           src={getImageUrl(audioBook.cover_image_url) || 'https://images.pexels.com/photos/3184419/pexels-photo-3184419.jpeg?auto=compress&cs=tinysrgb&w=300&h=400&fit=crop'} 
                           alt={audioBook.title}
-                          className="w-12 h-16 object-cover rounded shadow-sm"
+                          className="w-12 h-16 object-contain rounded shadow-sm"
                         />
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -591,7 +594,7 @@ const AudioBooks: React.FC = () => {
                       <img
                         src={coverPreviewUrl}
                         alt="Cover preview"
-                        className="w-40 h-56 object-cover rounded-lg shadow-md border-2 border-gray-200"
+                        className="w-40 h-56 object-contain rounded-lg shadow-md border-2 border-gray-200"
                       />
                       <button
                         type="button"

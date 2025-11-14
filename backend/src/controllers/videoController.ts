@@ -4,6 +4,8 @@ import { AuthRequest } from '../middleware/auth';
 import { UserRole } from '../types';
 import fs from 'fs';
 import path from 'path';
+import { NotificationsController } from './notificationsController';
+import { imageProcessingService } from '../services/ImageProcessingService';
 
 const extractYouTubeId = (url: string): string => {
   const regex = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/;
@@ -23,6 +25,7 @@ export const getAllVideos = async (req: AuthRequest, res: Response): Promise<voi
     const limit = parseInt(req.query.limit as string) || 10;
     const language = req.query.language as string;
     const category = req.query.category as string;
+    const search = req.query.search as string;
     const offset = (page - 1) * limit;
 
     // For admin users, show all videos (active and inactive). For regular users, only active videos.
@@ -40,6 +43,12 @@ export const getAllVideos = async (req: AuthRequest, res: Response): Promise<voi
     if (category) {
       query += ` AND category ILIKE $${paramIndex}`;
       queryParams.push(`%${category}%`);
+      paramIndex++;
+    }
+
+    if (search) {
+      query += ` AND (title ILIKE $${paramIndex} OR description ILIKE $${paramIndex})`;
+      queryParams.push(`%${search}%`);
       paramIndex++;
     }
 
@@ -62,6 +71,12 @@ export const getAllVideos = async (req: AuthRequest, res: Response): Promise<voi
     if (category) {
       countQuery += ` AND category ILIKE $${countParamIndex}`;
       countParams.push(`%${category}%`);
+      countParamIndex++;
+    }
+
+    if (search) {
+      countQuery += ` AND (title ILIKE $${countParamIndex} OR description ILIKE $${countParamIndex})`;
+      countParams.push(`%${search}%`);
     }
 
     const countResult = await pool.query(countQuery, countParams);
@@ -139,6 +154,10 @@ export const createVideo = async (req: AuthRequest, res: Response): Promise<void
     let file_size = null;
     let mime_type = null;
     let thumbnail_url = null;
+    let thumbnailSmall = null;
+    let thumbnailMedium = null;
+    let thumbnailLarge = null;
+    let thumbnailThumbnail = null;
 
     // Handle based on video source
     if (video_source === 'youtube') {
@@ -182,6 +201,31 @@ export const createVideo = async (req: AuthRequest, res: Response): Promise<void
         if (!thumbnail_url.startsWith('/')) {
           thumbnail_url = '/' + thumbnail_url;
         }
+
+        try {
+          // Process the uploaded thumbnail to generate multiple sizes
+          const processedImages = await imageProcessingService.processUploadedImage(
+            thumbnailPath,
+            {
+              aspectRatio: '16:9', // Videos use 16:9 aspect ratio
+              quality: 85,
+              format: 'webp',
+              outputDir: path.join(process.cwd(), 'public', 'images')
+            }
+          );
+
+          // Convert absolute paths to relative URLs for database storage
+          const publicDir = path.join(process.cwd(), 'public');
+          thumbnailThumbnail = imageProcessingService.convertToRelativePath(processedImages.thumbnail, publicDir);
+          thumbnailSmall = imageProcessingService.convertToRelativePath(processedImages.small, publicDir);
+          thumbnailMedium = imageProcessingService.convertToRelativePath(processedImages.medium, publicDir);
+          thumbnailLarge = imageProcessingService.convertToRelativePath(processedImages.large, publicDir);
+
+          console.log('✅ Video thumbnail processed successfully');
+        } catch (error) {
+          console.error('❌ Error processing video thumbnail:', error);
+          // Continue without processed images if processing fails
+        }
       } else {
         // No thumbnail provided - set as null and let frontend handle fallback
         thumbnail_url = null;
@@ -194,20 +238,27 @@ export const createVideo = async (req: AuthRequest, res: Response): Promise<void
     const result = await pool.query(
       `INSERT INTO videos (
         title, description, youtube_url, youtube_id, thumbnail_url,
+        thumbnail_thumbnail, thumbnail_small, thumbnail_medium, thumbnail_large,
         language, category, duration, video_source, video_file_path,
         file_size, mime_type, created_by
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
       RETURNING *`,
       [
         title, description, youtube_url_final, youtube_id, thumbnail_url,
+        thumbnailThumbnail, thumbnailSmall, thumbnailMedium, thumbnailLarge,
         language, category, duration, video_source, video_file_path,
         file_size, mime_type, req.user!.id
       ]
     );
 
+    const createdVideo = result.rows[0];
+
+    // Create notification for the new video
+    await NotificationsController.createNotification('video', createdVideo.id, createdVideo.title);
+
     res.status(201).json({
       message: 'Video created successfully',
-      video: result.rows[0]
+      video: createdVideo
     });
   } catch (error) {
     console.error('Create video error:', error);
@@ -251,6 +302,10 @@ export const updateVideo = async (req: AuthRequest, res: Response): Promise<void
     let file_size = null;
     let mime_type = null;
     let thumbnail_url = null;
+    let thumbnailSmall = null;
+    let thumbnailMedium = null;
+    let thumbnailLarge = null;
+    let thumbnailThumbnail = null;
 
     // Get current video data for cleanup
     const currentVideoResult = await pool.query('SELECT * FROM videos WHERE id = $1', [id]);
@@ -303,6 +358,31 @@ export const updateVideo = async (req: AuthRequest, res: Response): Promise<void
       if (!thumbnail_url.startsWith('/')) {
         thumbnail_url = '/' + thumbnail_url;
       }
+
+      try {
+        // Process the uploaded thumbnail to generate multiple sizes
+        const processedImages = await imageProcessingService.processUploadedImage(
+          thumbnailPath,
+          {
+            aspectRatio: '16:9', // Videos use 16:9 aspect ratio
+            quality: 85,
+            format: 'webp',
+            outputDir: path.join(process.cwd(), 'public', 'images')
+          }
+        );
+
+        // Convert absolute paths to relative URLs for database storage
+        const publicDir = path.join(process.cwd(), 'public');
+        thumbnailThumbnail = imageProcessingService.convertToRelativePath(processedImages.thumbnail, publicDir);
+        thumbnailSmall = imageProcessingService.convertToRelativePath(processedImages.small, publicDir);
+        thumbnailMedium = imageProcessingService.convertToRelativePath(processedImages.medium, publicDir);
+        thumbnailLarge = imageProcessingService.convertToRelativePath(processedImages.large, publicDir);
+
+        console.log('✅ Video thumbnail updated and processed successfully');
+      } catch (error) {
+        console.error('❌ Error processing updated video thumbnail:', error);
+        // Continue without processed images if processing fails
+      }
     }
 
     const result = await pool.query(
@@ -312,18 +392,23 @@ export const updateVideo = async (req: AuthRequest, res: Response): Promise<void
         youtube_url = COALESCE($3, youtube_url),
         youtube_id = COALESCE($4, youtube_id),
         thumbnail_url = COALESCE($5, thumbnail_url),
-        language = COALESCE($6, language),
-        category = COALESCE($7, category),
-        duration = COALESCE($8, duration),
-        video_source = COALESCE($9, video_source),
-        video_file_path = COALESCE($10, video_file_path),
-        file_size = COALESCE($11, file_size),
-        mime_type = COALESCE($12, mime_type),
-        is_active = COALESCE($13, is_active)
-      WHERE id = $14
+        thumbnail_thumbnail = COALESCE($6, thumbnail_thumbnail),
+        thumbnail_small = COALESCE($7, thumbnail_small),
+        thumbnail_medium = COALESCE($8, thumbnail_medium),
+        thumbnail_large = COALESCE($9, thumbnail_large),
+        language = COALESCE($10, language),
+        category = COALESCE($11, category),
+        duration = COALESCE($12, duration),
+        video_source = COALESCE($13, video_source),
+        video_file_path = COALESCE($14, video_file_path),
+        file_size = COALESCE($15, file_size),
+        mime_type = COALESCE($16, mime_type),
+        is_active = COALESCE($17, is_active)
+      WHERE id = $18
       RETURNING *`,
       [
         title, description, youtube_url_final, youtube_id, thumbnail_url,
+        thumbnailThumbnail, thumbnailSmall, thumbnailMedium, thumbnailLarge,
         language, category, duration, video_source, video_file_path,
         file_size, mime_type, is_active, id
       ]

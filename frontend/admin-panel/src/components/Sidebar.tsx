@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Users, Book, Video, Headphones, LogOut } from 'lucide-react';
+import { Home, Users, Book, Video, Headphones, BarChart3, LogOut } from 'lucide-react';
 
 interface SidebarProps {
   user: any;
@@ -12,6 +12,7 @@ const Sidebar: React.FC<SidebarProps> = ({ user, onLogout }) => {
 
   const navItems = [
     { path: '/', icon: Home, label: 'Dashboard' },
+    { path: '/analytics', icon: BarChart3, label: 'Analytics' },
     { path: '/users', icon: Users, label: 'Users' },
     { path: '/books', icon: Book, label: 'Books' },
     { path: '/videos', icon: Video, label: 'Videos' },
